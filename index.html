@@ -1,266 +1,442 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>雾境智培 - Web 控制台 (MQTT)</title>
-  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-  <style>
-    body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif; margin: 18px; }
-    h1 { font-size: 18px; margin: 0 0 12px; }
-    .card { border: 1px solid #eee; border-radius: 10px; padding: 12px 14px; margin: 12px 0; }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; }
-    .kv { min-width: 160px; }
-    .k { color: #666; font-size: 12px; }
-    .v { font-size: 22px; margin-top: 4px; }
-    .small { color: #888; font-size: 12px; }
-    button { padding: 10px 14px; border-radius: 8px; border: 1px solid #ddd; background: #fff; cursor: pointer; }
-    button.primary { border-color: #2a6f97; color: #2a6f97; }
-    button.danger { border-color: #d62828; color: #d62828; }
-    input { padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; width: 100%; }
-    label { display:block; font-size: 12px; color: #666; margin-bottom: 6px; }
-    .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    @media (max-width: 720px){ .grid { grid-template-columns: 1fr; } }
-    .statusDot{ display:inline-block; width:10px; height:10px; border-radius:50%; background:#bbb; margin-right:8px; vertical-align:middle; }
-    .connected .statusDot{ background:#2a9d8f; }
-    .disconnected .statusDot{ background:#e76f51; }
-    code{ background:#f7f7f7; padding:2px 6px; border-radius:6px; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>雾境智培 - Web 控制台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Chart.js for trend visualization -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- MQTT library -->
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<style>
+/* Global styles */
+body { margin:0; font-family:-apple-system,BlinkMacSystem,'Segoe UI',Roboto,Helvetica,Arial,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif; background:#f7f7f7; color:#333; }
+header { background:#2a6f97; color:#fff; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; }
+header h1 { font-size:18px; margin:0; }
+nav ul { list-style:none; margin:0; padding:0; display:flex; gap:14px; }
+nav li { cursor:pointer; padding:8px 12px; border-radius:6px; }
+nav li.active { background:#fff; color:#2a6f97; }
+main { padding:16px; }
+.section { display:none; }
+/* Card container */
+.card { background:#fff; border-radius:8px; padding:16px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+/* Metrics layout */
+.metrics { display:flex; flex-wrap:wrap; gap:16px; }
+.metric { flex:1 1 140px; }
+.metric .label { font-size:12px; color:#666; }
+.metric .value { font-size:24px; margin-top:4px; }
+/* Buttons */
+.btn { padding:10px 16px; border-radius:6px; border:1px solid #2a6f97; background:#fff; color:#2a6f97; cursor:pointer; margin-right:8px; margin-bottom:8px; }
+.btn.danger { border-color:#d62828; color:#d62828; }
+.btn.primary { background:#2a6f97; color:#fff; }
+button:disabled { opacity:0.6; cursor:default; }
+/* Device list */
+.device-list { list-style:none; padding:0; margin:0; }
+.device-item { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; }
+.device-item:last-child { border-bottom:none; }
+.device-item .actions button { margin-left:6px; }
+/* Responsive nav for mobile */
+@media(max-width:720px){
+  nav ul { gap:0; flex:1; justify-content:space-around; }
+  nav li { flex:1; text-align:center; }
+}
+</style>
 </head>
 <body>
-  <h1>雾境智培 - Web 控制台（MQTT）</h1>
-
-  <div class="card disconnected" id="connCard">
-    <div style="display:flex; align-items:center; gap:10px;">
-      <span class="statusDot"></span>
-      <div>
-        <div id="connState" style="font-weight:600;">未连接</div>
-        <div class="small" id="connHint">请先连接 MQTT（默认使用公共 Broker，无需注册）</div>
+<header>
+  <h1>雾境智培</h1>
+  <nav>
+    <ul>
+      <li id="tab-overview" class="active" onclick="showSection('overview')">总览</li>
+      <li id="tab-control" onclick="showSection('control')">智控</li>
+      <li id="tab-trend" onclick="showSection('trend')">趋势</li>
+      <li id="tab-device" onclick="showSection('device')">设备</li>
+      <li id="tab-ai" onclick="showSection('ai')">AI</li>
+      <li id="tab-about" onclick="showSection('about')">关于</li>
+    </ul>
+  </nav>
+</header>
+<main>
+  <!-- Overview Section -->
+  <div id="section-overview" class="section" style="display:block;">
+    <div class="card">
+      <div id="conn-state" style="font-weight:600;">未连接</div>
+      <div id="conn-hint" style="font-size:12px;color:#666;margin-top:4px;">请先连接 MQTT（默认使用公共 Broker）</div>
+      <div style="margin-top:12px;">
+        <button class="btn primary" onclick="connectMQTT()">连接</button>
+        <button class="btn danger" onclick="disconnectMQTT()">断开</button>
+        <button class="btn" onclick="copyLink()">复制评委链接</button>
+      </div>
+      <div style="margin-top:12px;">
+        <label style="font-size:12px;color:#666;">WebSocket URL</label>
+        <input id="cfg-wsUrl" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;" value="wss://broker.emqx.io:8084/mqtt">
+        <label style="font-size:12px;color:#666; margin-top:8px;">ClientId</label>
+        <input id="cfg-clientId" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+        <label style="font-size:12px;color:#666; margin-top:8px;">订阅 Topic</label>
+        <input id="cfg-topicSub" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;" value="home/data">
+        <label style="font-size:12px;color:#666; margin-top:8px;">发布 Topic</label>
+        <input id="cfg-topicPub" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;" value="home/control">
+        <label style="font-size:12px;color:#666; margin-top:8px;">设备 ID（可选，用于过滤）</label>
+        <input id="cfg-deviceId" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;" placeholder="不填则不过滤">
       </div>
     </div>
-    <div style="height:10px;"></div>
-    <div class="grid" id="cfgPanel">
-      <div>
-        <label>MQTT WebSocket URL</label>
-        <input id="wsUrl" value="wss://broker.emqx.io:8084/mqtt" />
-        <div class="small">默认使用 EMQX 公共 Broker；如果你有自己的服务器，改成你的 <code>wss://</code> 地址即可。</div>
+    <div class="card">
+      <div class="metrics">
+        <div class="metric">
+          <div class="label">温度 (℃)</div>
+          <div class="value" id="ov-temp">--</div>
+        </div>
+        <div class="metric">
+          <div class="label">湿度 (%)</div>
+          <div class="value" id="ov-hum">--</div>
+        </div>
+        <div class="metric">
+          <div class="label">风扇</div>
+          <div class="value" id="ov-fan">--</div>
+        </div>
+        <div class="metric">
+          <div class="label">加热器</div>
+          <div class="value" id="ov-heater">--</div>
+        </div>
       </div>
-      <div>
-        <label>ClientId（随便填，建议唯一）</label>
-        <input id="clientId" value="webdemo-00000000" />
-      </div>
-      <div>
-        <label>订阅 Topic（数据上报）</label>
-        <input id="topicSub" value="home/data" />
-      </div>
-      <div>
-        <label>发布 Topic（控制下发）</label>
-        <input id="topicPub" value="home/control" />
-      </div>
-    </div>
-    <div style="margin-top:12px;">
-      <label>设备 ID（可选，用于过滤并绑定控制）</label>
-      <input id="deviceId" placeholder="不填则不过滤" />
-      <div class="small">如果设备上报包含 deviceId 字段，此处填写后可避免误控；生成的演示链接也会携带该值。</div>
-    </div>
-    <div style="height:12px;"></div>
-    <div class="row">
-      <button class="primary" onclick="connect()">连接</button>
-      <button class="danger" onclick="disconnect()">断开</button>
-      <button onclick="copyDemoLink()">复制演示链接</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="row">
-      <div class="kv">
-        <div class="k">温度 (℃)</div>
-        <div class="v" id="temp">--</div>
-      </div>
-      <div class="kv">
-        <div class="k">湿度 (%)</div>
-        <div class="v" id="hum">--</div>
-      </div>
-      <div class="kv">
-        <div class="k">风扇</div>
-        <div class="v" id="fanState">--</div>
-      </div>
-      <div class="kv">
-        <div class="k">加热器</div>
-        <div class="v" id="heaterState">--</div>
+      <div style="margin-top:16px;">
+        <canvas id="sparkline" height="80"></canvas>
       </div>
     </div>
-    <div class="small" id="lastUpdate">最后更新：--</div>
-  </div>
-
-  <div class="card">
-    <div style="font-weight:600; margin-bottom:10px;">控制</div>
-    <div class="row">
-      <button class="primary" onclick="sendControl('fan', true)">风扇 ON</button>
-      <button onclick="sendControl('fan', false)">风扇 OFF</button>
-      <button class="primary" onclick="sendControl('heater', true)">加热 ON</button>
-      <button onclick="sendControl('heater', false)">加热 OFF</button>
-    </div>
-    <div class="small" style="margin-top:10px;">
-      下发格式：<code>{"type":"control","device":"fan|heater","state":true|false,"deviceId":"..."}</code>
+    <div class="card">
+      <div style="font-weight:600;margin-bottom:8px;">事件日志</div>
+      <pre id="ov-log" style="font-size:12px;line-height:1.4;white-space:pre-wrap;max-height:200px;overflow:auto;"></pre>
     </div>
   </div>
 
-  <div class="card">
-    <div style="font-weight:600; margin-bottom:10px;">日志</div>
-    <pre id="log" style="white-space:pre-wrap; margin:0; font-size:12px; line-height:1.35;"></pre>
+  <!-- Control Section -->
+  <div id="section-control" class="section">
+    <div class="card">
+      <div style="font-weight:600;margin-bottom:8px;">控制面板</div>
+      <div>
+        <button class="btn primary" onclick="sendControl('fan',true)">风扇 ON</button>
+        <button class="btn" onclick="sendControl('fan',false)">风扇 OFF</button>
+        <button class="btn primary" onclick="sendControl('heater',true)">加热 ON</button>
+        <button class="btn" onclick="sendControl('heater',false)">加热 OFF</button>
+        <button class="btn danger" onclick="sendEmergencyStop()">急停</button>
+      </div>
+      <div style="font-size:12px;color:#666;margin-top:8px;">下发格式：{"type":"control","device":"fan|heater","state":true|false,"deviceId":"..."}</div>
+    </div>
+    <div class="card">
+      <div style="font-weight:600;margin-bottom:8px;">控制记录</div>
+      <pre id="control-log" style="font-size:12px;line-height:1.4;white-space:pre-wrap;max-height:260px;overflow:auto;"></pre>
+    </div>
   </div>
+
+  <!-- Trend Section -->
+  <div id="section-trend" class="section">
+    <div class="card">
+      <div style="font-weight:600;margin-bottom:8px;">趋势图</div>
+      <canvas id="trendChart" height="180"></canvas>
+      <div style="margin-top:12px;">
+        <button class="btn" onclick="exportCSV()">导出CSV</button>
+      </div>
+    </div>
+    <div class="card">
+      <div style="font-weight:600;margin-bottom:8px;">统计</div>
+      <div id="stats" style="font-size:14px;"></div>
+    </div>
+  </div>
+
+  <!-- Device Section -->
+  <div id="section-device" class="section">
+    <div class="card">
+      <div style="font-weight:600;margin-bottom:8px;">设备管理</div>
+      <div style="margin-bottom:8px;">
+        <input id="dev-alias" placeholder="别名" style="width:30%;padding:6px;border:1px solid #ccc;border-radius:4px;">
+        <input id="dev-id" placeholder="deviceId" style="width:30%;padding:6px;border:1px solid #ccc;border-radius:4px;">
+        <input id="dev-topicSub" placeholder="订阅Topic" style="width:30%;padding:6px;border:1px solid #ccc;border-radius:4px;">
+        <input id="dev-topicPub" placeholder="发布Topic" style="width:30%;padding:6px;border:1px solid #ccc;border-radius:4px;margin-top:8px;">
+        <button class="btn primary" onclick="addDevice()">添加设备</button>
+      </div>
+      <ul id="device-list" class="device-list"></ul>
+      <div style="margin-top:8px;">
+        <button class="btn" onclick="exportDevices()">导出配置</button>
+        <input type="file" id="import-file" style="display:none;" accept=".json" onchange="importDevices(event)">
+        <button class="btn" onclick="document.getElementById('import-file').click()">导入配置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Section -->
+  <div id="section-ai" class="section">
+    <div class="card">
+      <div style="font-weight:600;margin-bottom:8px;">AI 建议（占位）</div>
+      <p style="font-size:14px;color:#666;">此区域预留用于接入 AI 模型（如根据历史数据自动调节风扇/加热逻辑，或根据图像识别植物状态）</p>
+    </div>
+  </div>
+
+  <!-- About Section -->
+  <div id="section-about" class="section">
+    <div class="card">
+      <div style="font-weight:600;margin-bottom:8px;">关于</div>
+      <p style="font-size:14px;line-height:1.5;">
+        本系统使用 MQTT 协议实现 ESP32 与 Web、微信小程序之间的通信。默认使用 EMQX 公共 Broker，亦可切换到自建服务器。<br>
+        数据上报示例：{"type":"data","temp":25.5,"hum":60,"fan":false,"heater":true,"deviceId":"aero-xxxx"}<br>
+        控制下发示例：{"type":"control","device":"fan","state":true,"deviceId":"aero-xxxx"}<br>
+        <br>
+        使用步骤：在配置面板填写你的 MQTT WebSocket 地址、ClientId、订阅和发布 Topic、设备ID（可选），点击连接即可开始接收数据。<br>
+        若要邀请评委查看，可在连接后点击“复制评委链接”，自动生成带参数的演示 URL，并分享出去。
+      </p>
+    </div>
+  </div>
+</main>
 
 <script>
-  // 生成随机 8 位 hex
-  const randomHex = () => Math.floor(Math.random()*0xFFFFFFFF).toString(16).padStart(8,'0').toUpperCase();
-  // 解析 URL 参数
-  const params = new URLSearchParams(window.location.search);
-  const autoConnectFlag = params.get('autoconnect') === '1';
-  const hideCfg = params.get('hidecfg') === '1';
-  const urlDeviceId = params.get('deviceId') || '';
-
-  // 初始化输入框默认值
-  const clientIdEl = document.getElementById('clientId');
-  clientIdEl.value = 'webdemo-' + randomHex();
-  if (urlDeviceId) {
-    document.getElementById('deviceId').value = urlDeviceId;
-  }
-  // 隐藏配置面板如果 hidecfg=1
-  if (hideCfg) {
-    document.getElementById('cfgPanel').style.display = 'none';
-  }
-
-  let client = null;
-
-  function log(msg){
-    const el = document.getElementById('log');
-    el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n` + el.textContent;
-  }
-
-  function setConnUI(connected){
-    const card = document.getElementById('connCard');
-    const state = document.getElementById('connState');
-    const hint = document.getElementById('connHint');
-    if(connected){
-      card.classList.remove('disconnected');
-      card.classList.add('connected');
-      state.textContent = '已连接';
-      hint.textContent = '正在订阅数据并可下发控制';
-    }else{
-      card.classList.remove('connected');
-      card.classList.add('disconnected');
-      state.textContent = '未连接';
-      hint.textContent = '请先连接 MQTT（默认使用公共 Broker，无需注册）';
-    }
-  }
-
-  function connect(){
-    const wsUrl = document.getElementById('wsUrl').value.trim();
-    const clientId = document.getElementById('clientId').value.trim() || ('webdemo-' + randomHex());
-    const topicSub = document.getElementById('topicSub').value.trim();
-    if(!wsUrl){ alert('请填写 WebSocket URL'); return; }
-    if(!topicSub){ alert('请填写订阅 Topic'); return; }
-
-    disconnect(); // reset
-
-    log(`连接 ${wsUrl} clientId=${clientId}`);
-    try {
-      client = mqtt.connect(wsUrl, { clientId });
-    } catch(e) {
-      log('连接失败: ' + e.message);
-      return;
-    }
-
-    client.on('connect', () => {
-      setConnUI(true);
-      log('MQTT connected');
-      client.subscribe(topicSub, (err) => {
-        if(err){ log('subscribe failed: ' + err.message); return; }
-        log('subscribed: ' + topicSub);
-      });
-    });
-
-    client.on('reconnect', () => log('reconnecting...'));
-    client.on('close', () => { setConnUI(false); log('connection closed'); });
-    client.on('error', (e) => { setConnUI(false); log('error: ' + e.message); });
-
-    client.on('message', (topic, payload) => {
-      try{
-        const s = payload.toString();
-        const data = JSON.parse(s);
-        // 过滤 deviceId
-        const filterId = document.getElementById('deviceId').value.trim() || urlDeviceId;
-        if (filterId && data.deviceId && data.deviceId !== filterId) {
-          return;
-        }
-        if(typeof data.temp !== 'undefined') document.getElementById('temp').textContent = data.temp;
-        if(typeof data.hum !== 'undefined') document.getElementById('hum').textContent = data.hum;
-        if(typeof data.fan !== 'undefined') document.getElementById('fanState').textContent = data.fan ? 'ON' : 'OFF';
-        if(typeof data.heater !== 'undefined') document.getElementById('heaterState').textContent = data.heater ? 'ON' : 'OFF';
-        document.getElementById('lastUpdate').textContent = '最后更新：' + new Date().toLocaleString();
-      }catch(e){
-        log('message parse failed: ' + e.message);
-      }
-    });
-  }
-
-  function disconnect(){
-    if(client){
-      try{ client.end(true); }catch(e){}
-      client = null;
-    }
-    setConnUI(false);
-  }
-
-  function sendControl(device, state){
-    if(!client || !client.connected){
-      alert('请先连接 MQTT');
-      return;
-    }
-    const topicPub = document.getElementById('topicPub').value.trim();
-    if(!topicPub){ alert('请填写发布 Topic'); return; }
-    const msg = { type: 'control', device, state: !!state };
-    const did = document.getElementById('deviceId').value.trim() || urlDeviceId;
-    if (did) msg.deviceId = did;
-    const s = JSON.stringify(msg);
-    client.publish(topicPub, s);
-    log(`publish ${topicPub}: ${s}`);
-  }
-
-  function copyDemoLink(){
-    const base = location.origin + location.pathname;
-    const did = document.getElementById('deviceId').value.trim();
-    let qs = 'autoconnect=1&hidecfg=1';
-    if(did){
-      qs += '&deviceId=' + encodeURIComponent(did);
-    }
-    const url = base + '?' + qs;
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).then(() => {
-        alert('已复制链接，可直接发送给评委\n' + url);
-      }, () => {
-        alert('复制失败，请手动复制此链接：\n' + url);
-      });
-    } else {
-      prompt('复制演示链接：', url);
-    }
-  }
-
-  // 自动连接
-  window.addEventListener('DOMContentLoaded', () => {
-    // 更新随机 clientId
-    const wsUrl = params.get('wsUrl');
-    if (wsUrl) document.getElementById('wsUrl').value = wsUrl;
-    const tSub = params.get('topicSub');
-    if (tSub) document.getElementById('topicSub').value = tSub;
-    const tPub = params.get('topicPub');
-    if (tPub) document.getElementById('topicPub').value = tPub;
-    if (autoConnectFlag) {
-      connect();
-    }
+// 切换展示的 section
+function showSection(name){
+  const sections = ['overview','control','trend','device','ai','about'];
+  sections.forEach(s => {
+    document.getElementById('section-' + s).style.display = (s === name ? 'block' : 'none');
+    document.getElementById('tab-' + s).classList.toggle('active', s === name);
   });
-</script>
+}
 
+// 随机 hex
+function randomHex(){
+  return Math.floor(Math.random() * 0xFFFFFFFF).toString(16).padStart(8,'0');
+}
+
+// MQTT 相关
+let client = null;
+let sparkChart = null;
+let trendChart = null;
+let trendData = [];
+let trendLabels = [];
+
+// 更新统计
+function updateStats(){
+  if(trendData.length === 0) return;
+  const temps = trendData.map(d => d.temp).filter(v => typeof v === 'number');
+  const hums = trendData.map(d => d.hum).filter(v => typeof v === 'number');
+  const avg = arr => arr.reduce((a,b) => a + b, 0) / arr.length;
+  const min = arr => Math.min(...arr);
+  const max = arr => Math.max(...arr);
+  const stats = `
+    温度 - 平均 ${avg(temps).toFixed(1)}℃，最高 ${max(temps).toFixed(1)}℃，最低 ${min(temps).toFixed(1)}℃<br>
+    湿度 - 平均 ${avg(hums).toFixed(1)}%，最高 ${max(hums).toFixed(1)}%，最低 ${min(hums).toFixed(1)}%
+  `;
+  document.getElementById('stats').innerHTML = stats;
+}
+function updateCharts(){
+  if(sparkChart){
+    sparkChart.data.labels = trendLabels;
+    sparkChart.data.datasets[0].data = trendData.map(d => d.temp);
+    sparkChart.update('none');
+  }
+  if(trendChart){
+    trendChart.data.labels = trendLabels;
+    trendChart.data.datasets[0].data = trendData.map(d => d.temp);
+    trendChart.data.datasets[1].data = trendData.map(d => d.hum);
+    trendChart.update('none');
+  }
+  updateStats();
+}
+
+// 页面加载后初始化图表和设备列表
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('cfg-clientId').value = 'web-' + randomHex();
+  const sparkCtx = document.getElementById('sparkline').getContext('2d');
+  sparkChart = new Chart(sparkCtx, {
+    type:'line',
+    data:{ labels:[], datasets:[{ label:'温度', data:[], borderColor:'#2a6f97', tension:0.3, borderWidth:2, pointRadius:0 }] },
+    options:{ plugins:{ legend:{display:false} }, scales:{ x:{display:false}, y:{display:false} } }
+  });
+  const trendCtx = document.getElementById('trendChart').getContext('2d');
+  trendChart = new Chart(trendCtx, {
+    type:'line',
+    data:{ labels:[], datasets:[
+      { label:'温度(℃)', data:[], borderColor:'#2a6f97', tension:0.3, borderWidth:2, pointRadius:0, fill:false },
+      { label:'湿度(%)', data:[], borderColor:'#e76f51', tension:0.3, borderWidth:2, pointRadius:0, fill:false },
+    ]},
+    options:{ scales:{ x:{ display:true }, y:{ display:true } } }
+  });
+  loadDevices();
+});
+
+// MQTT 连接
+function connectMQTT(){
+  const wsUrl = document.getElementById('cfg-wsUrl').value.trim();
+  const clientId = document.getElementById('cfg-clientId').value.trim() || ('web-' + randomHex());
+  const topicSub = document.getElementById('cfg-topicSub').value.trim();
+  if(!wsUrl || !topicSub){ alert('请填写 WebSocket URL 和订阅 Topic'); return; }
+  disconnectMQTT();
+  try{
+    client = mqtt.connect(wsUrl, { clientId });
+  }catch(e){
+    logOverview('连接失败: ' + e.message);
+    return;
+  }
+  client.on('connect', () => {
+    setConnState(true);
+    client.subscribe(topicSub, err => {
+      if(err) logOverview('订阅失败: ' + err.message);
+      else logOverview('已订阅: ' + topicSub);
+    });
+  });
+  client.on('reconnect', () => logOverview('正在重连...'));
+  client.on('close', () => { setConnState(false); logOverview('连接已关闭'); });
+  client.on('error', e => { setConnState(false); logOverview('错误: ' + e.message); });
+  client.on('message', (topic,payload) => {
+    let msg;
+    try{ msg = JSON.parse(payload.toString()); } catch(e){ return; }
+    const filterId = document.getElementById('cfg-deviceId').value.trim();
+    if(filterId && msg.deviceId && msg.deviceId !== filterId){ return; }
+    // 更新总览
+    if(typeof msg.temp !== 'undefined') document.getElementById('ov-temp').textContent = msg.temp;
+    if(typeof msg.hum !== 'undefined') document.getElementById('ov-hum').textContent = msg.hum;
+    if(typeof msg.fan !== 'undefined') document.getElementById('ov-fan').textContent = msg.fan ? 'ON' : 'OFF';
+    if(typeof msg.heater !== 'undefined') document.getElementById('ov-heater').textContent = msg.heater ? 'ON' : 'OFF';
+    // 更新趋势数据
+    const now = new Date();
+    const label = now.toLocaleTimeString();
+    if(trendLabels.length > 50){ trendLabels.shift(); trendData.shift(); }
+    trendLabels.push(label);
+    trendData.push({ temp: msg.temp, hum: msg.hum });
+    updateCharts();
+    logOverview('RX: ' + JSON.stringify(msg));
+  });
+}
+function disconnectMQTT(){
+  if(client){ try{ client.end(); }catch(e){} }
+  setConnState(false);
+}
+function setConnState(connected){
+  const stateEl = document.getElementById('conn-state');
+  const hintEl = document.getElementById('conn-hint');
+  stateEl.textContent = connected ? '已连接' : '未连接';
+  hintEl.textContent = connected ? '正在接收数据并可控制' : '请先连接 MQTT（默认使用公共 Broker）';
+}
+function sendControl(device, state){
+  const topicPub = document.getElementById('cfg-topicPub').value.trim();
+  if(!client || client.connected !== true){ alert('请先连接 MQTT'); return; }
+  if(!topicPub){ alert('请填写发布 Topic'); return; }
+  const deviceId = document.getElementById('cfg-deviceId').value.trim();
+  const msg = { type:'control', device, state };
+  if(deviceId) msg.deviceId = deviceId;
+  client.publish(topicPub, JSON.stringify(msg));
+  logControl('TX: ' + JSON.stringify(msg));
+}
+function sendEmergencyStop(){
+  sendControl('fan', false);
+  sendControl('heater', false);
+}
+function logOverview(text){
+  const logEl = document.getElementById('ov-log');
+  logEl.textContent = '[' + new Date().toLocaleTimeString() + '] ' + text + '\n' + logEl.textContent;
+}
+function logControl(text){
+  const logEl = document.getElementById('control-log');
+  logEl.textContent = '[' + new Date().toLocaleTimeString() + '] ' + text + '\n' + logEl.textContent;
+}
+
+// 复制带参数的演示链接
+function copyLink(){
+  const params = new URLSearchParams();
+  params.set('autoconnect','1');
+  params.set('hidecfg','1');
+  const deviceId = document.getElementById('cfg-deviceId').value.trim();
+  if(deviceId) params.set('deviceId', deviceId);
+  const url = window.location.origin + window.location.pathname + '?' + params.toString() + '#kiosk';
+  navigator.clipboard.writeText(url).then(() => {
+    alert('复制成功: ' + url);
+  });
+}
+
+// 导出 CSV
+function exportCSV(){
+  let csv = '时间,温度,湿度\n';
+  for(let i = 0; i < trendLabels.length; i++){
+    const d = trendData[i];
+    csv += `${trendLabels[i]},${d.temp},${d.hum}\n`;
+  }
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'trend.csv';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// 设备管理
+let devices = [];
+function loadDevices(){
+  try{
+    const saved = localStorage.getItem('devices');
+    if(saved) devices = JSON.parse(saved);
+  }catch(e){ devices = []; }
+  renderDeviceList();
+}
+function saveDevices(){
+  localStorage.setItem('devices', JSON.stringify(devices));
+}
+function addDevice(){
+  const alias = document.getElementById('dev-alias').value.trim();
+  const id = document.getElementById('dev-id').value.trim();
+  const sub = document.getElementById('dev-topicSub').value.trim();
+  const pub = document.getElementById('dev-topicPub').value.trim();
+  if(!alias || !id || !sub || !pub){ alert('请填写完整的别名、deviceId、订阅和发布 Topic'); return; }
+  devices.push({ alias, id, sub, pub });
+  saveDevices();
+  renderDeviceList();
+  document.getElementById('dev-alias').value='';
+  document.getElementById('dev-id').value='';
+  document.getElementById('dev-topicSub').value='';
+  document.getElementById('dev-topicPub').value='';
+}
+function deleteDevice(idx){
+  devices.splice(idx, 1);
+  saveDevices();
+  renderDeviceList();
+}
+function useDevice(idx){
+  const d = devices[idx];
+  document.getElementById('cfg-clientId').value = 'web-' + randomHex();
+  document.getElementById('cfg-deviceId').value = d.id;
+  document.getElementById('cfg-topicSub').value = d.sub;
+  document.getElementById('cfg-topicPub').value = d.pub;
+  showSection('overview');
+}
+function renderDeviceList(){
+  const listEl = document.getElementById('device-list');
+  listEl.innerHTML = '';
+  devices.forEach((d, idx) => {
+    const li = document.createElement('li');
+    li.className = 'device-item';
+    li.innerHTML = `<span>${d.alias} (${d.id})</span><span class="actions"><button class="btn" onclick="useDevice(${idx})">使用</button><button class="btn danger" onclick="deleteDevice(${idx})">删除</button></span>`;
+    listEl.appendChild(li);
+  });
+}
+function exportDevices(){
+  const blob = new Blob([JSON.stringify(devices,null,2)], {type:'application/json'});
+  const link=document.createElement('a');
+  link.href=URL.createObjectURL(blob);
+  link.download='devices.json';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+function importDevices(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try{
+      const arr = JSON.parse(e.target.result);
+      if(Array.isArray(arr)){ devices = arr; saveDevices(); renderDeviceList(); alert('导入成功'); }
+      else alert('格式不正确');
+    }catch(err){ alert('解析失败: ' + err.message); }
+  };
+  reader.readAsText(file);
+}
+</script>
 </body>
 </html>
