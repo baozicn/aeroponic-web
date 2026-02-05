@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>雾境智培 - Web 控制台 (MQTT)</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif; margin: 18px; }
+    h1 { font-size: 18px; margin: 0 0 12px; }
+    .card { border: 1px solid #eee; border-radius: 10px; padding: 12px 14px; margin: 12px 0; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .kv { min-width: 160px; }
+    .k { color: #666; font-size: 12px; }
+    .v { font-size: 22px; margin-top: 4px; }
+    .small { color: #888; font-size: 12px; }
+    button { padding: 10px 14px; border-radius: 8px; border: 1px solid #ddd; background: #fff; cursor: pointer; }
+    button.primary { border-color: #2a6f97; color: #2a6f97; }
+    button.danger { border-color: #d62828; color: #d62828; }
+    input { padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; width: 100%; }
+    label { display:block; font-size: 12px; color: #666; margin-bottom: 6px; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 720px){ .grid { grid-template-columns: 1fr; } }
+    .statusDot{ display:inline-block; width:10px; height:10px; border-radius:50%; background:#bbb; margin-right:8px; vertical-align:middle; }
+    .connected .statusDot{ background:#2a9d8f; }
+    .disconnected .statusDot{ background:#e76f51; }
+    code{ background:#f7f7f7; padding:2px 6px; border-radius:6px; }
+  </style>
+</head>
+<body>
+  <h1>雾境智培 - Web 控制台（MQTT）</h1>
+
+  <div class="card" id="connCard" class="disconnected">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span class="statusDot"></span>
+      <div>
+        <div id="connState" style="font-weight:600;">未连接</div>
+        <div class="small" id="connHint">请先连接 MQTT（默认使用公共 Broker，无需注册）</div>
+      </div>
+    </div>
+    <div style="height:10px;"></div>
+    <div class="grid">
+      <div>
+        <label>MQTT WebSocket URL</label>
+        <input id="wsUrl" value="wss://broker.emqx.io:8084/mqtt" />
+        <div class="small">默认使用 EMQX 公共 Broker；如果你有自己的服务器，改成你的 <code>wss://</code> 地址即可。</div>
+      </div>
+      <div>
+        <label>ClientId（随便填，建议唯一）</label>
+        <input id="clientId" value="webdemo-00000000" />
+      </div>
+      <div>
+        <label>订阅 Topic（数据上报）</label>
+        <input id="topicSub" value="home/data" />
+      </div>
+      <div>
+        <label>发布 Topic（控制下发）</label>
+        <input id="topicPub" value="home/control" />
+      </div>
+    </div>
+
+    <div style="height:12px;"></div>
+    <div class="row">
+      <button class="primary" onclick="connect()">连接</button>
+      <button class="danger" onclick="disconnect()">断开</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="kv">
+        <div class="k">温度 (℃)</div>
+        <div class="v" id="temp">--</div>
+      </div>
+      <div class="kv">
+        <div class="k">湿度 (%)</div>
+        <div class="v" id="hum">--</div>
+      </div>
+      <div class="kv">
+        <div class="k">风扇</div>
+        <div class="v" id="fanState">--</div>
+      </div>
+      <div class="kv">
+        <div class="k">加热器</div>
+        <div class="v" id="heaterState">--</div>
+      </div>
+    </div>
+    <div class="small" id="lastUpdate">最后更新：--</div>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:600; margin-bottom:10px;">控制</div>
+    <div class="row">
+      <button class="primary" onclick="sendControl('fan', true)">风扇 ON</button>
+      <button onclick="sendControl('fan', false)">风扇 OFF</button>
+      <button class="primary" onclick="sendControl('heater', true)">加热 ON</button>
+      <button onclick="sendControl('heater', false)">加热 OFF</button>
+    </div>
+    <div class="small" style="margin-top:10px;">
+      下发格式：<code>{"type":"control","device":"fan|heater","state":true|false}</code>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:600; margin-bottom:10px;">日志</div>
+    <pre id="log" style="white-space:pre-wrap; margin:0; font-size:12px; line-height:1.35;"></pre>
+  </div>
+
+<script>
+  const randomHex = () => Math.floor(Math.random()*0xFFFFFFFF).toString(16).padStart(8,'0').toUpperCase();
+  document.getElementById('clientId').value = 'webdemo-' + randomHex();
+
+  let client = null;
+
+  function log(msg){
+    const el = document.getElementById('log');
+    el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n` + el.textContent;
+  }
+
+  function setConnUI(connected){
+    const card = document.getElementById('connCard');
+    const state = document.getElementById('connState');
+    const hint = document.getElementById('connHint');
+    if(connected){
+      card.classList.remove('disconnected');
+      card.classList.add('connected');
+      state.textContent = '已连接';
+      hint.textContent = '正在订阅数据并可下发控制';
+    }else{
+      card.classList.remove('connected');
+      card.classList.add('disconnected');
+      state.textContent = '未连接';
+      hint.textContent = '请先连接 MQTT（默认使用公共 Broker，无需注册）';
+    }
+  }
+
+  function connect(){
+    const wsUrl = document.getElementById('wsUrl').value.trim();
+    const clientId = document.getElementById('clientId').value.trim() || ('webdemo-' + randomHex());
+    const topicSub = document.getElementById('topicSub').value.trim();
+    if(!wsUrl){ alert('请填写 WebSocket URL'); return; }
+    if(!topicSub){ alert('请填写订阅 Topic'); return; }
+
+    disconnect(); // reset
+
+    log(`连接 ${wsUrl} clientId=${clientId}`);
+    client = mqtt.connect(wsUrl, { clientId });
+
+    client.on('connect', () => {
+      setConnUI(true);
+      log('MQTT connected');
+      client.subscribe(topicSub, (err) => {
+        if(err){ log('subscribe failed: ' + err.message); return; }
+        log('subscribed: ' + topicSub);
+      });
+    });
+
+    client.on('reconnect', () => log('reconnecting...'));
+    client.on('close', () => { setConnUI(false); log('connection closed'); });
+    client.on('error', (e) => { setConnUI(false); log('error: ' + e.message); });
+
+    client.on('message', (topic, payload) => {
+      try{
+        const s = payload.toString();
+        const data = JSON.parse(s);
+        if(typeof data.temp !== 'undefined') document.getElementById('temp').textContent = data.temp;
+        if(typeof data.hum !== 'undefined') document.getElementById('hum').textContent = data.hum;
+        if(typeof data.fan !== 'undefined') document.getElementById('fanState').textContent = data.fan ? 'ON' : 'OFF';
+        if(typeof data.heater !== 'undefined') document.getElementById('heaterState').textContent = data.heater ? 'ON' : 'OFF';
+        document.getElementById('lastUpdate').textContent = '最后更新：' + new Date().toLocaleString();
+      }catch(e){
+        log('message parse failed: ' + e.message);
+      }
+    });
+  }
+
+  function disconnect(){
+    if(client){
+      try{ client.end(true); }catch(e){}
+      client = null;
+    }
+    setConnUI(false);
+  }
+
+  function sendControl(device, state){
+    if(!client || !client.connected){
+      alert('请先连接 MQTT');
+      return;
+    }
+    const topicPub = document.getElementById('topicPub').value.trim();
+    if(!topicPub){ alert('请填写发布 Topic'); return; }
+
+    const msg = { type: 'control', device, state: !!state };
+    const s = JSON.stringify(msg);
+    client.publish(topicPub, s);
+    log(`publish ${topicPub}: ${s}`);
+  }
+</script>
+
+</body>
+</html>
