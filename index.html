@@ -1,1601 +1,302 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="theme-color" content="#0F6DFF" />
-  <title>雾境智培 · 气雾栽培智能中控</title>
-
-  <!-- Libraries (CDN) -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>雾境智培 - Web控制台</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-
   <style>
-    :root{
-      --bg0:#F6FAFF;
-      --bg1:#ECF5FF;
-      --bg2:#EAFBF4;
-      --card:#ffffff;
-      --text:#0A1424;
-      --muted:#5A6676;
-      --line:rgba(10,20,36,.10);
-      --shadow:0 18px 45px rgba(10,20,36,.12);
-      --shadow2:0 10px 24px rgba(10,20,36,.10);
-      --radius:18px;
-      --radius2:14px;
-      --primary:#0F6DFF;
-      --primary2:#3AA7FF;
-      --accent:#15B97E;
-      --warn:#FFB020;
-      --danger:#E5484D;
-      --ok:#12B76A;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #a1c4fd, #c2e9fb);
+      margin: 0;
+      padding: 20px;
+      color: #333;
     }
-
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;
-      font-family:var(--sans);
-      color:var(--text);
-      background:
-        radial-gradient(1200px 800px at 12% -10%, rgba(15,109,255,.20), transparent 55%),
-        radial-gradient(1000px 700px at 88% 10%, rgba(21,185,126,.18), transparent 55%),
-        radial-gradient(900px 650px at 70% 110%, rgba(255,176,32,.18), transparent 55%),
-        linear-gradient(180deg, var(--bg0), var(--bg1) 55%, var(--bg2));
-      overflow-x:hidden;
+    .container {
+      max-width: 1000px;
+      margin: auto;
+      background: rgba(255, 255, 255, 0.92);
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
-
-    a{color:inherit; text-decoration:none}
-    button, input, select{font-family:inherit}
-
-    /* Subtle noise */
-    .noise{pointer-events:none; position:fixed; inset:0; opacity:.035; background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/></filter><rect width="240" height="240" filter="url(%23n)" opacity="0.35"/></svg>'); mix-blend-mode:multiply}
-
-    /* Top bar */
-    .topbar{
-      position:sticky; top:0; z-index:40;
-      display:flex; align-items:center; justify-content:space-between;
-      padding:14px 18px;
-      border-bottom:1px solid var(--line);
-      background:rgba(255,255,255,.72);
-      backdrop-filter: blur(14px);
+    h1 {
+      text-align: center;
+      margin-top: 0;
     }
-
-    .brand{
-      display:flex; align-items:center; gap:12px;
-      min-width: 220px;
-      cursor:pointer;
-      user-select:none;
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: center;
     }
-    .logo{
-      width:40px; height:40px;
-      border-radius:14px;
-      background:linear-gradient(135deg, var(--primary), var(--primary2));
-      box-shadow: 0 14px 30px rgba(15,109,255,.25);
-      display:grid; place-items:center;
-      overflow:hidden;
-    }
-    .logo svg{width:22px; height:22px; color:#fff}
-    .brandText .name{font-weight:800; letter-spacing:.2px; line-height:1.1}
-    .brandText .tag{font-size:12px; color:var(--muted); margin-top:2px}
-
-    .nav{
-      display:flex; gap:6px;
-      padding:6px;
-      background:rgba(255,255,255,.66);
-      border:1px solid var(--line);
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
       border-radius: 999px;
-      box-shadow: var(--shadow2);
+      background: #f0f2f5;
+      font-size: 12px;
     }
-    .nav a{
-      padding:9px 12px;
-      border-radius: 999px;
-      font-size:14px;
-      color: var(--muted);
-      display:flex; align-items:center; gap:8px;
-      transition: all .18s ease;
+    .tag.ok { background: #eafbf0; color: #0a7b36; }
+    .tag.bad { background: #fff1f0; color: #cf1322; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
     }
-    .nav a svg{width:16px; height:16px; opacity:.85}
-    .nav a.active{background:rgba(15,109,255,.10); color:var(--text)}
-    .nav a:hover{background:rgba(10,20,36,.06); color:var(--text)}
-
-    .actions{display:flex; align-items:center; gap:10px; min-width: 260px; justify-content:flex-end}
-
-    .status{
-      display:flex; align-items:center; gap:8px;
-      padding:8px 10px;
-      border:1px solid var(--line);
-      background:rgba(255,255,255,.74);
-      border-radius:999px;
-      font-size:13px;
-      color: var(--muted);
+    .tile {
+      background: #fff;
+      border-radius: 10px;
+      padding: 12px;
+      border: 1px solid #eee;
     }
-    .dot{width:10px; height:10px; border-radius:999px; background: #C1C7D0; box-shadow:0 0 0 4px rgba(193,199,208,.25)}
-    .dot.ok{background: var(--ok); box-shadow:0 0 0 4px rgba(18,183,106,.20)}
-    .dot.warn{background: var(--warn); box-shadow:0 0 0 4px rgba(255,176,32,.22)}
-
-    .btn{
-      border:1px solid var(--line);
-      background: rgba(255,255,255,.78);
-      padding:10px 12px;
-      border-radius: 12px;
-      font-size:14px;
-      cursor:pointer;
-      box-shadow: var(--shadow2);
-      transition: transform .06s ease, background .18s ease, border-color .18s ease;
+    .tile .k {
+      font-size: 12px;
+      color: #666;
     }
-    .btn:hover{background:#fff}
-    .btn:active{transform: translateY(1px)}
-    .btn.primary{background:linear-gradient(135deg, var(--primary), var(--primary2)); border-color: transparent; color:#fff; box-shadow: 0 18px 40px rgba(15,109,255,.22)}
-    .btn.primary:hover{filter:saturate(1.05)}
-    .btn.icon{width:42px; height:42px; padding:0; display:grid; place-items:center}
-    .btn.icon svg{width:18px; height:18px}
-    .btn.ghost{background:transparent; box-shadow:none}
-
-    .wrap{max-width:1180px; margin:0 auto; padding:18px 18px 34px}
-
-    /* Views */
-    .view{display:none; animation: fadeIn .18s ease}
-    .view.active{display:block}
-    @keyframes fadeIn{from{opacity:0; transform: translateY(6px)} to{opacity:1; transform: translateY(0)}}
-
-    /* Hero */
-    .hero{
-      display:grid;
-      grid-template-columns: 1.35fr .85fr;
-      gap:16px;
-      align-items:stretch;
-      margin-top: 8px;
+    .tile .v {
+      font-size: 22px;
+      font-weight: bold;
+      margin-top: 6px;
     }
 
-    .card{
-      background: rgba(255,255,255,.84);
-      border:1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      overflow:hidden;
+    .controls {
+      margin-top: 18px;
+      border-top: 1px solid #eee;
+      padding-top: 14px;
+    }
+    .switch {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .switch input[type="checkbox"] {
+      width: 46px;
+      height: 24px;
     }
 
-    .heroCard{
-      padding:22px;
-      position:relative;
+    .debug {
+      margin-top: 18px;
+      border-top: 1px solid #eee;
+      padding-top: 14px;
     }
-    .heroCard::after{
-      content:"";
-      position:absolute; inset:-2px;
-      background:
-        radial-gradient(600px 220px at 10% 10%, rgba(15,109,255,.18), transparent 55%),
-        radial-gradient(520px 240px at 85% 10%, rgba(21,185,126,.14), transparent 55%);
-      z-index:0;
-    }
-    .heroInner{position:relative; z-index:1; display:flex; flex-direction:column; height:100%}
-
-    .hTitle{font-size:34px; line-height:1.1; font-weight:900; letter-spacing:.2px}
-    .hSub{margin-top:10px; color:var(--muted); font-size:14px; line-height:1.6; max-width: 48ch}
-
-    .badges{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px}
-    .badge{
-      display:inline-flex; align-items:center; gap:8px;
-      padding:7px 10px;
-      border-radius: 999px;
-      border:1px solid var(--line);
-      background: rgba(255,255,255,.72);
-      font-size:12px;
-      color: var(--muted);
-    }
-    .badge strong{color:var(--text); font-weight:700}
-
-    .heroActions{display:flex; gap:10px; margin-top:auto; padding-top:16px}
-    .heroActions .btn{box-shadow:none}
-
-    .rightCard{padding:18px; display:flex; flex-direction:column; gap:12px}
-    .bigStats{display:grid; grid-template-columns: 1fr 1fr; gap:12px}
-
-    .stat{
-      background: rgba(255,255,255,.90);
-      border:1px solid var(--line);
-      border-radius: var(--radius2);
-      padding:14px;
-      box-shadow: var(--shadow2);
-      min-height: 104px;
-    }
-    .stat .label{font-size:12px; color:var(--muted)}
-    .stat .num{margin-top:6px; font-weight:900; font-size:30px; letter-spacing:.2px}
-    .stat .unit{font-size:14px; color:var(--muted); font-weight:700; margin-left:6px}
-    .stat .sub{margin-top:6px; font-size:12px; color:var(--muted)}
-
-    .hint{
-      padding:12px 12px;
-      border-radius: 14px;
-      border:1px dashed rgba(10,20,36,.18);
-      background: rgba(255,255,255,.70);
-      color: var(--muted);
-      font-size:12px;
-      line-height:1.5;
+    pre {
+      background: #0b1020;
+      color: #e5e7eb;
+      padding: 12px;
+      border-radius: 10px;
+      overflow: auto;
+      max-height: 320px;
     }
 
-    /* Grid sections */
-    .grid{
-      display:grid;
-      grid-template-columns: 1.2fr .8fr;
-      gap:16px;
-      margin-top: 16px;
-    }
-
-    .section{padding:18px}
-
-    .sectionHead{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom: 12px}
-    .sectionTitle{font-weight:900; font-size:16px}
-    .sectionSub{color:var(--muted); font-size:12px; margin-top:4px}
-
-    .miniRow{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
-    .pill{
-      display:inline-flex; align-items:center; gap:8px;
-      padding:8px 10px;
-      border-radius: 999px;
-      border:1px solid var(--line);
-      background: rgba(255,255,255,.68);
-      font-size:12px;
-      color: var(--muted);
-    }
-
-    /* Controls */
-    .ctlGrid{display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top: 6px}
-    .ctl{
-      border:1px solid var(--line);
-      border-radius: var(--radius2);
-      padding:14px;
-      background: rgba(255,255,255,.88);
-      box-shadow: var(--shadow2);
-    }
-    .ctlTop{display:flex; align-items:center; justify-content:space-between; gap:12px}
-    .ctlName{font-weight:800}
-    .ctlDesc{color:var(--muted); font-size:12px; margin-top:4px}
-
-    .toggle{
-      width:48px; height:28px; border-radius:999px;
-      border:1px solid var(--line);
-      background: rgba(10,20,36,.10);
-      position:relative; cursor:pointer;
-      transition: background .18s ease;
-      flex-shrink:0;
-    }
-    .toggle::after{
-      content:""; position:absolute; top:3px; left:3px;
-      width:22px; height:22px; border-radius:999px;
-      background:#fff; box-shadow:0 10px 18px rgba(10,20,36,.18);
-      transition: transform .18s ease;
-    }
-    .toggle.on{background: rgba(21,185,126,.35)}
-    .toggle.on::after{transform: translateX(20px)}
-
-    .slider{width:100%; margin-top: 10px}
-    .slider input[type="range"]{width:100%}
-    .sliderLabel{display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-top:6px}
-
-    .presetRow{display:flex; gap:10px; flex-wrap:wrap}
-    .preset{
-      padding:10px 12px;
-      border-radius: 14px;
-      border:1px solid var(--line);
-      background: rgba(255,255,255,.80);
-      cursor:pointer;
-      box-shadow: var(--shadow2);
-      transition: transform .06s ease, background .18s ease;
-    }
-    .preset:hover{background:#fff}
-    .preset:active{transform: translateY(1px)}
-    .preset .t{font-weight:800; font-size:13px}
-    .preset .d{font-size:12px; color:var(--muted); margin-top:2px}
-
-    /* AI */
-    .aiBox{
-      border:1px solid var(--line);
-      border-radius: var(--radius2);
-      background: rgba(255,255,255,.88);
-      padding:14px;
-      box-shadow: var(--shadow2);
-    }
-    .aiBig{font-weight:900; font-size:18px}
-    .aiText{margin-top:8px; color:var(--muted); font-size:13px; line-height:1.6}
-    .aiList{margin:10px 0 0; padding-left:18px; color:var(--muted); font-size:13px; line-height:1.7}
-
-    /* Timeline */
-    .timeline{margin-top: 16px}
-    .events{padding:0; margin:0; list-style:none}
-    .ev{
-      display:flex; gap:12px;
-      padding:12px 18px;
-      border-top:1px solid var(--line);
-    }
-    .ev:first-child{border-top:none}
-    .evIcon{
-      width:32px; height:32px; border-radius:12px;
-      display:grid; place-items:center;
-      background: rgba(15,109,255,.10);
-      border:1px solid rgba(15,109,255,.18);
-      flex-shrink:0;
-    }
-    .evIcon svg{width:16px; height:16px; color: var(--primary)}
-    .evMain{min-width:0}
-    .evTitle{font-weight:800; font-size:13px}
-    .evSub{margin-top:3px; font-size:12px; color:var(--muted)}
-    .evTime{margin-left:auto; font-size:12px; color:var(--muted); white-space:nowrap}
-
-    /* About */
-    .aboutGrid{display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top: 16px}
-    .aboutItem{padding:18px}
-    .kpiGrid{display:grid; grid-template-columns: repeat(3,1fr); gap:12px; margin-top: 12px}
-    .kpi{border:1px solid var(--line); border-radius:14px; background:rgba(255,255,255,.82); padding:12px; box-shadow:var(--shadow2)}
-    .kpi .k{font-size:12px; color:var(--muted)}
-    .kpi .v{font-size:18px; font-weight:900; margin-top:4px}
-
-    /* Modal */
-    .modalMask{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(10,20,36,.35); z-index:60; padding:16px}
-    .modalMask.show{display:flex}
-    .modal{
-      width:min(980px, 100%);
-      border-radius: 20px;
-      border:1px solid var(--line);
-      background: rgba(255,255,255,.92);
-      box-shadow: 0 40px 90px rgba(10,20,36,.24);
-      overflow:hidden;
-    }
-    .modalTop{display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--line)}
-    .modalTitle{font-weight:900}
-    .modalBody{padding:16px}
-
-    .formGrid{display:grid; grid-template-columns: 1fr 1fr; gap:12px}
-    .field label{display:block; font-size:12px; color:var(--muted); margin:0 0 6px}
-    .input, select{
-      width:100%;
-      padding:10px 12px;
-      border-radius: 12px;
-      border:1px solid var(--line);
-      background: rgba(255,255,255,.90);
-      outline:none;
-    }
-    .input:focus, select:focus{border-color: rgba(15,109,255,.35); box-shadow: 0 0 0 4px rgba(15,109,255,.12)}
-
-    details{margin-top: 12px; border:1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.82); overflow:hidden}
-    summary{cursor:pointer; padding:12px 14px; font-weight:800}
-    details .inner{padding: 12px 14px; border-top:1px solid var(--line)}
-
-    .modalFoot{display:flex; justify-content:space-between; gap:10px; padding:14px 16px; border-top:1px solid var(--line); background: rgba(255,255,255,.88)}
-
-    /* Toast */
-    .toast{
-      position:fixed;
-      left:50%; bottom:18px;
-      transform: translateX(-50%);
-      background: rgba(10,20,36,.92);
-      color:#fff;
-      padding:10px 12px;
-      border-radius: 999px;
-      font-size:13px;
-      display:none;
-      z-index:80;
-      box-shadow: 0 18px 45px rgba(10,20,36,.28);
-      max-width: min(680px, calc(100% - 28px));
-      white-space: nowrap;
-      overflow:hidden;
-      text-overflow: ellipsis;
-    }
-    .toast.show{display:block; animation: toastIn .16s ease}
-    @keyframes toastIn{from{opacity:0; transform: translateX(-50%) translateY(6px)} to{opacity:1; transform: translateX(-50%) translateY(0)}}
-
-    /* Kiosk */
-    body.kiosk .topbar{position:sticky}
-    body.kiosk .nav{display:none}
-    body.kiosk .actions .btn.icon, body.kiosk .actions #btnSettings, body.kiosk .actions #btnShare{display:none}
-    body.kiosk .wrap{max-width: 1320px}
-    body.kiosk .hTitle{font-size:42px}
-    body.kiosk .stat .num{font-size:34px}
-
-    /* Responsive */
-    @media (max-width: 980px){
-      .brand{min-width:unset}
-      .actions{min-width:unset}
-      .hero{grid-template-columns: 1fr;}
-      .grid{grid-template-columns: 1fr;}
-      .aboutGrid{grid-template-columns:1fr}
-      .kpiGrid{grid-template-columns:1fr 1fr}
-      .nav{display:none}
-    }
-
-    @media (max-width: 560px){
-      .topbar{padding:12px 12px}
-      .wrap{padding:14px 12px 24px}
-      .hTitle{font-size:28px}
-      .brandText .tag{display:none}
-      .actions{gap:8px}
-      .status{display:none}
-      .heroActions{flex-direction:column}
-      .ctlGrid{grid-template-columns:1fr}
-      .bigStats{grid-template-columns:1fr 1fr}
-      .kpiGrid{grid-template-columns:1fr}
-    }
-
-    /* Reduced motion */
-    @media (prefers-reduced-motion: reduce){
-      *{scroll-behavior:auto!important; transition:none!important; animation:none!important}
+    .hint {
+      font-size: 12px;
+      color: #666;
+      margin-top: 10px;
     }
   </style>
 </head>
-
 <body>
-  <div class="noise" aria-hidden="true"></div>
+  <div class="container">
+    <h1>雾境智培 - Web控制台</h1>
 
-  <header class="topbar">
-    <div class="brand" id="btnBrand" title="返回总览">
-      <div class="logo" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2C9.2 6.1 5 10.1 5 14.3C5 18 8.1 21 12 21C15.9 21 19 18 19 14.3C19 10.1 14.8 6.1 12 2Z" stroke="currentColor" stroke-width="1.9"/>
-          <path d="M8.6 14.9C9.2 16.7 10.8 18 12.7 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
-        </svg>
+    <div class="row">
+      <div>
+        <span class="tag" id="connTag">MQTT 未连接</span>
+        <span class="tag" id="devTag">deviceId: -</span>
       </div>
-      <div class="brandText">
-        <div class="name">雾境智培</div>
-        <div class="tag">气雾栽培智能中控 · 公网演示版</div>
+      <div>
+        <span class="tag" id="stm32Tag">STM32: -</span>
+        <span class="tag" id="diagTag">rxOk: - / crcErr: -</span>
       </div>
     </div>
 
-    <nav class="nav" aria-label="主导航">
-      <a href="#overview" data-view="overview" class="active">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 11.2C4 10.2 4.6 9.2 5.6 8.8L11 6.1C11.6 5.8 12.4 5.8 13 6.1L18.4 8.8C19.4 9.2 20 10.2 20 11.2V18.2C20 19.2 19.2 20 18.2 20H5.8C4.8 20 4 19.2 4 18.2V11.2Z" stroke="currentColor" stroke-width="1.8"/><path d="M9.5 20V14.6C9.5 13.5 10.4 12.6 11.5 12.6H12.5C13.6 12.6 14.5 13.5 14.5 14.6V20" stroke="currentColor" stroke-width="1.8"/></svg>
-        总览
-      </a>
-      <a href="#control" data-view="control">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3V12L18 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M21 12C21 16.97 16.97 21 12 21C7.03 21 3 16.97 3 12C3 7.03 7.03 3 12 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        智控
-      </a>
-      <a href="#insights" data-view="insights">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 19V5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 19H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 15L10 12L13 14L18 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        趋势
-      </a>
-      <a href="#about" data-view="about">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 21C16.97 21 21 16.97 21 12C21 7.03 16.97 3 12 3C7.03 3 3 7.03 3 12C3 16.97 7.03 21 12 21Z" stroke="currentColor" stroke-width="1.8"/><path d="M12 16V12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 8.5H12.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-        关于
-      </a>
-    </nav>
-
-    <div class="actions">
-      <div class="status" id="statusPill" title="设备在线状态">
-        <span class="dot" id="statusDot"></span>
-        <span id="statusText">未连接</span>
-      </div>
-      <button class="btn primary" id="btnStart">开始演示</button>
-      <button class="btn icon" id="btnShare" title="复制评委链接" aria-label="复制评委链接">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 8C15 6.34 16.34 5 18 5C19.66 5 21 6.34 21 8C21 9.66 19.66 11 18 11C16.34 11 15 9.66 15 8Z" stroke="currentColor" stroke-width="1.8"/><path d="M3 12C3 10.34 4.34 9 6 9C7.66 9 9 10.34 9 12C9 13.66 7.66 15 6 15C4.34 15 3 13.66 3 12Z" stroke="currentColor" stroke-width="1.8"/><path d="M15 16C15 14.34 16.34 13 18 13C19.66 13 21 14.34 21 16C21 17.66 19.66 19 18 19C16.34 19 15 17.66 15 16Z" stroke="currentColor" stroke-width="1.8"/><path d="M8.7 11L15.2 8.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8.7 13L15.2 15.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      </button>
-      <button class="btn icon" id="btnSettings" title="设置" aria-label="设置">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 15.5C13.93 15.5 15.5 13.93 15.5 12C15.5 10.07 13.93 8.5 12 8.5C10.07 8.5 8.5 10.07 8.5 12C8.5 13.93 10.07 15.5 12 15.5Z" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15.1L21 12L19.4 8.9L15.9 8.4L14.1 5.3L12 3L9.9 5.3L8.1 8.4L4.6 8.9L3 12L4.6 15.1L8.1 15.6L9.9 18.7L12 21L14.1 18.7L15.9 15.6L19.4 15.1Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-      </button>
+    <div class="grid" id="metricsGrid">
+      <div class="tile"><div class="k">温度</div><div class="v" id="tempValue">-</div></div>
+      <div class="tile"><div class="k">湿度</div><div class="v" id="humValue">-</div></div>
+      <div class="tile"><div class="k">光照</div><div class="v" id="luxValue">-</div></div>
+      <div class="tile"><div class="k">EC</div><div class="v" id="ecValue">-</div></div>
+      <div class="tile"><div class="k">pH</div><div class="v" id="phValue">-</div></div>
+      <div class="tile"><div class="k">水量</div><div class="v" id="waterValue">-</div></div>
+      <div class="tile"><div class="k">运行时间</div><div class="v" id="runtimeValue">-</div></div>
+      <div class="tile"><div class="k">感应状态</div><div class="v" id="sensorValue">-</div></div>
+      <div class="tile"><div class="k">喷雾</div><div class="v" id="mistValue">-</div></div>
+      <div class="tile"><div class="k">雾化强度</div><div class="v" id="mistDutyValue">-</div></div>
+      <div class="tile"><div class="k">风扇</div><div class="v" id="fanValue">-</div></div>
+      <div class="tile"><div class="k">补光PWM</div><div class="v" id="pwmValue">-</div></div>
+      <!-- 新增的水位与RSSI -->
+      <div class="tile"><div class="k">水位(0/1)</div><div class="v" id="waterLevelStateValue">-</div></div>
+      <div class="tile"><div class="k">液位RSSI</div><div class="v" id="lvRssiValue">-</div></div>
     </div>
-  </header>
 
-  <main class="wrap">
-    <!-- ========== 总览 ========== -->
-    <section class="view active" id="view-overview" data-view="overview">
-      <div class="hero">
-        <div class="card heroCard">
-          <div class="heroInner">
-            <div class="hTitle">把“雾”做成可控的生长环境</div>
-            <div class="hSub">
-              这是一个面向评委/导师的实时展示看板：环境监测、远程智控、智能建议。
-              <br>无需安装、打开即用；设备数据通过 MQTT 公网链路实时推送。
-            </div>
-
-            <div class="badges">
-              <span class="badge"><strong id="bDevice">设备：未选择</strong></span>
-              <span class="badge">模式：<strong id="bMode">展示</strong></span>
-              <span class="badge">最近更新：<strong id="bLast">--</strong></span>
-            </div>
-
-            <div class="heroActions">
-              <button class="btn primary" id="btnStart2">开始演示</button>
-              <button class="btn" id="btnGoControl">进入智控</button>
-              <button class="btn ghost" id="btnKiosk">大屏模式</button>
-            </div>
-          </div>
+    <div class="controls">
+      <h3>控制</h3>
+      <div class="row">
+        <div class="switch">
+          <label for="fanToggle">风扇开关</label>
+          <input type="checkbox" id="fanToggle" />
         </div>
-
-        <div class="card rightCard">
-          <div class="bigStats">
-            <div class="stat">
-              <div class="label">环境温度</div>
-              <div class="num"><span id="vTemp">--</span><span class="unit">℃</span></div>
-              <div class="sub" id="sTemp">目标：--</div>
-            </div>
-            <div class="stat">
-              <div class="label">相对湿度</div>
-              <div class="num"><span id="vHum">--</span><span class="unit">%RH</span></div>
-              <div class="sub" id="sHum">目标：--</div>
-            </div>
-            <div class="stat">
-              <div class="label">风扇</div>
-              <div class="num"><span id="vFan">--</span></div>
-              <div class="sub" id="sFan">风速：--</div>
-            </div>
-            <div class="stat">
-              <div class="label">加热</div>
-              <div class="num"><span id="vHeater">--</span></div>
-              <div class="sub" id="sOnline">在线：--</div>
-            </div>
-          </div>
-          <div class="hint" id="hintBox">
-            提示：比赛现场建议用「评委链接」打开（自动连接 + 隐藏设置），避免误触。
-          </div>
+        <div class="switch">
+          <label for="heaterToggle">加热开关</label>
+          <input type="checkbox" id="heaterToggle" />
         </div>
       </div>
-
-      <div class="grid">
-        <div class="card">
-          <div class="section">
-            <div class="sectionHead">
-              <div>
-                <div class="sectionTitle">环境趋势</div>
-                <div class="sectionSub">温度 / 湿度实时曲线（浏览器本地缓存，适合演示）</div>
-              </div>
-              <div class="miniRow">
-                <span class="pill">数据源：<span id="pSource">MQTT</span></span>
-                <span class="pill">缓存：<span id="pCache">0</span> 条</span>
-              </div>
-            </div>
-            <canvas id="chartEnv" height="170"></canvas>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="section">
-            <div class="sectionHead">
-              <div>
-                <div class="sectionTitle">智能建议</div>
-                <div class="sectionSub">规则引擎（可替换为模型推理 / 云端服务）</div>
-              </div>
-              <span class="pill" id="aiPill">--</span>
-            </div>
-
-            <div class="aiBox">
-              <div class="aiBig" id="aiTitle">等待数据…</div>
-              <div class="aiText" id="aiText">连接设备后，这里会根据当前环境给出建议（例如：是否需要通风/加热）。</div>
-              <ul class="aiList" id="aiList"></ul>
-              <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap">
-                <button class="btn" id="btnCopyJudge">复制评委链接</button>
-                <button class="btn ghost" id="btnClear">清空本地缓存</button>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div class="hint">
+        Web 控制仍使用 <code>home/control</code>（fan/heater）。如果需要网页端更多控制项，建议统一走 OneNET 或加一层后端鉴权。
       </div>
+    </div>
 
-      <div class="card timeline">
-        <div class="section">
-          <div class="sectionHead">
-            <div>
-              <div class="sectionTitle">运行记录</div>
-              <div class="sectionSub">关键事件：连接、数据更新、控制下发（面向展示，已隐藏开发细节）</div>
-            </div>
-            <div class="miniRow">
-              <button class="btn ghost" id="btnExport">导出 CSV</button>
-            </div>
-          </div>
-          <ul class="events" id="events"></ul>
-        </div>
-      </div>
-    </section>
-
-    <!-- ========== 智控 ========== -->
-    <section class="view" id="view-control" data-view="control">
-      <div class="card" style="margin-top:8px">
-        <div class="section">
-          <div class="sectionHead">
-            <div>
-              <div class="sectionTitle">智控中心</div>
-              <div class="sectionSub">面向现场演示的手动控制（安全：默认只开放风扇 / 加热）</div>
-            </div>
-            <div class="miniRow">
-              <span class="pill">当前设备：<strong id="cDevice">--</strong></span>
-              <button class="btn danger" id="btnEStop" style="border-color:rgba(229,72,77,.25)">急停</button>
-            </div>
-          </div>
-
-          <div class="presetRow" id="presetRow">
-            <div class="preset" data-preset="seed">
-              <div class="t">育苗</div>
-              <div class="d">温和通风 · 稳定湿度</div>
-            </div>
-            <div class="preset" data-preset="grow">
-              <div class="t">生长</div>
-              <div class="d">增强换气 · 提升代谢</div>
-            </div>
-            <div class="preset" data-preset="eco">
-              <div class="t">节能</div>
-              <div class="d">降低功耗 · 保持舒适</div>
-            </div>
-          </div>
-
-          <div class="ctlGrid" style="margin-top:14px">
-            <div class="ctl">
-              <div class="ctlTop">
-                <div>
-                  <div class="ctlName">风扇</div>
-                  <div class="ctlDesc">用于通风与降温（对齐 ESP32 控制字段）</div>
-                </div>
-                <div class="toggle" id="tgFan" role="switch" aria-checked="false" tabindex="0"></div>
-              </div>
-              <div class="slider">
-                <input type="range" min="0" max="3" step="1" value="1" id="fanSpeed" />
-                <div class="sliderLabel"><span>风速</span><span id="fanSpeedTxt">1</span></div>
-              </div>
-            </div>
-
-            <div class="ctl">
-              <div class="ctlTop">
-                <div>
-                  <div class="ctlName">加热</div>
-                  <div class="ctlDesc">用于温度补偿（对齐 ESP32 控制字段）</div>
-                </div>
-                <div class="toggle" id="tgHeater" role="switch" aria-checked="false" tabindex="0"></div>
-              </div>
-              <div class="hint" style="margin-top:10px">
-                安全提示：现场演示请保持设备可视，避免长时间开启加热。
-              </div>
-            </div>
-          </div>
-
-          <div class="hint" style="margin-top:14px" id="ctrlNote">
-            说明：当前云端链路已打通；喷雾/补光等能力将待 STM32 接入后开放。
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ========== 趋势 ========== -->
-    <section class="view" id="view-insights" data-view="insights">
-      <div class="card" style="margin-top:8px">
-        <div class="section">
-          <div class="sectionHead">
-            <div>
-              <div class="sectionTitle">趋势与统计</div>
-              <div class="sectionSub">用于展示“稳定性与可控性”：min / max / avg 与近期波动</div>
-            </div>
-            <div class="miniRow">
-              <span class="pill">温度：<strong id="stTemp">--</strong></span>
-              <span class="pill">湿度：<strong id="stHum">--</strong></span>
-            </div>
-          </div>
-
-          <canvas id="chartTrend" height="200"></canvas>
-
-          <div class="kpiGrid">
-            <div class="kpi"><div class="k">温度 min/max</div><div class="v" id="kTemp">--</div></div>
-            <div class="kpi"><div class="k">湿度 min/max</div><div class="v" id="kHum">--</div></div>
-            <div class="kpi"><div class="k">最近 5 分钟波动</div><div class="v" id="kVar">--</div></div>
-          </div>
-
-          <div class="hint" style="margin-top:14px">
-            评委阅读建议：曲线越平稳、波动越小，说明闭环控制与结构设计越成熟。
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ========== 关于 ========== -->
-    <section class="view" id="view-about" data-view="about">
-      <div class="aboutGrid">
-        <div class="card aboutItem">
-          <div class="sectionTitle">产品定位</div>
-          <div class="sectionSub">雾境智培 · Aeroponic Intelligence Platform</div>
-          <div style="margin-top:10px; color:var(--muted); line-height:1.8; font-size:13px">
-            我们把“气雾栽培”从结构装置升级为一套可视、可控、可解释的系统：
-            <b>传感</b>采集 → <b>边缘</b>控制 → <b>云端</b>展示与决策。
-            <br><br>
-            当前版本已打通“设备 → 公网 MQTT → Web 看板/智控”的核心链路，
-            下一步将对接 STM32 获取真实传感数据并驱动更多执行器（喷雾/补光）。
-          </div>
-
-          <div class="kpiGrid">
-            <div class="kpi"><div class="k">公网展示</div><div class="v">已上线</div></div>
-            <div class="kpi"><div class="k">链路延迟</div><div class="v">秒级</div></div>
-            <div class="kpi"><div class="k">可扩展</div><div class="v">MQTT</div></div>
-          </div>
-        </div>
-
-        <div class="card aboutItem">
-          <div class="sectionTitle">展示说明</div>
-          <div class="sectionSub">面向评委的“最少操作”体验</div>
-          <div style="margin-top:10px; color:var(--muted); line-height:1.8; font-size:13px">
-            <ul style="margin:8px 0 0; padding-left:18px">
-              <li>点击右上角<strong>开始演示</strong>，即可连接设备并开始接收实时数据。</li>
-              <li>需要分享给评委时，点击<strong>分享</strong>复制“评委链接”。</li>
-              <li>评委链接支持：自动连接、隐藏设置、固定 deviceId，避免串台。</li>
-              <li>大屏展示：点击“总览 → 大屏模式”或 URL 加上 <span style="font-family:var(--mono)">#kiosk</span>。</li>
-            </ul>
-          </div>
-
-          <div class="hint" style="margin-top:12px">
-            技术说明已收敛到设置弹窗的“高级配置”，避免在展示页出现开发者表单。
-          </div>
-
-          <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap">
-            <button class="btn primary" id="btnOpenSettings">打开设置</button>
-            <button class="btn" id="btnCopyAbout">复制评委链接</button>
-          </div>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <!-- Settings modal -->
-  <div class="modalMask" id="modalMask" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-label="连接设置">
-      <div class="modalTop">
-        <div>
-          <div class="modalTitle">连接设置</div>
-          <div class="sectionSub">面向演示的简化配置：只需要设备标识（deviceId）即可防串台</div>
-        </div>
-        <button class="btn icon" id="btnCloseModal" aria-label="关闭">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 6L18 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        </button>
-      </div>
-
-      <div class="modalBody">
-        <div class="formGrid">
-          <div class="field">
-            <label>设备名称（仅用于展示）</label>
-            <input class="input" id="cfgName" placeholder="例如：雾培装置 A" />
-          </div>
-          <div class="field">
-            <label>deviceId（推荐填写，用于过滤）</label>
-            <input class="input" id="cfgDeviceId" placeholder="例如：aero-XXXXYYYY" />
-          </div>
-
-          <div class="field">
-            <label>温度目标窗口（℃）</label>
-            <div style="display:flex; gap:10px">
-              <input class="input" id="cfgTmin" placeholder="min" inputmode="decimal" />
-              <input class="input" id="cfgTmax" placeholder="max" inputmode="decimal" />
-            </div>
-          </div>
-          <div class="field">
-            <label>湿度目标窗口（%RH）</label>
-            <div style="display:flex; gap:10px">
-              <input class="input" id="cfgHmin" placeholder="min" inputmode="decimal" />
-              <input class="input" id="cfgHmax" placeholder="max" inputmode="decimal" />
-            </div>
-          </div>
-        </div>
-
-        <details id="advBox">
-          <summary>高级配置（开发者/调试用，展示页默认隐藏）</summary>
-          <div class="inner">
-            <div class="formGrid">
-              <div class="field">
-                <label>MQTT WebSocket URL</label>
-                <input class="input" id="cfgWs" placeholder="wss://broker.emqx.io:8084/mqtt" />
-              </div>
-              <div class="field">
-                <label>ClientId（可留空自动生成）</label>
-                <input class="input" id="cfgClientId" placeholder="web-xxxx" />
-              </div>
-              <div class="field">
-                <label>订阅 Topic（设备上报）</label>
-                <input class="input" id="cfgSub" placeholder="home/data" />
-              </div>
-              <div class="field">
-                <label>发布 Topic（控制下发）</label>
-                <input class="input" id="cfgPub" placeholder="home/control" />
-              </div>
-            </div>
-
-            <div class="hint" style="margin-top:12px">
-              公共 Broker 是共享的。比赛现场建议：<b>deviceId 过滤</b> 或 <b>队伍专属 Topic</b>。
-            </div>
-          </div>
-        </details>
-      </div>
-
-      <div class="modalFoot">
-        <div style="display:flex; gap:10px; flex-wrap:wrap">
-          <button class="btn" id="btnDisconnect">断开</button>
-          <button class="btn" id="btnCopyLink">复制评委链接</button>
-        </div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap">
-          <button class="btn ghost" id="btnSave">保存</button>
-          <button class="btn primary" id="btnConnect">连接</button>
-        </div>
-      </div>
+    <div class="debug">
+      <h3>调试 / 原始数据（自动合并多包）</h3>
+      <pre id="rawPre">{}</pre>
     </div>
   </div>
 
-  <div class="toast" id="toast"></div>
-
   <script>
-    // ----------------------------
-    // Utilities
-    // ----------------------------
-    const $ = (sel) => document.querySelector(sel);
-    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+    // === MQTT 配置（与 ESP32 Web/MQTT 输出保持一致）
+    var MQTT_BROKER = 'wss://broker.emqx.io:8084/mqtt';
+    var TOPIC_DATA = 'home/data';
+    var TOPIC_CONTROL = 'home/control';
 
-    function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
-    function nowISO(){ const d=new Date(); return d.toLocaleString(); }
-    function fmt1(n){ if(n===null||n===undefined||Number.isNaN(n)) return '--'; return (Math.round(n*10)/10).toFixed(1); }
-    function fmt0(n){ if(n===null||n===undefined||Number.isNaN(n)) return '--'; return String(Math.round(n)); }
-    function safeNum(v){ const n = Number(v); return Number.isFinite(n) ? n : null; }
+    var state = {};
 
-    function toast(msg){
-      const el = $('#toast');
-      el.textContent = msg;
-      el.classList.add('show');
-      clearTimeout(toast._t);
-      toast._t = setTimeout(()=> el.classList.remove('show'), 2400);
+    function setTag(id, text, cls) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = text;
+      el.className = 'tag' + (cls ? (' ' + cls) : '');
     }
 
-    function copy(text){
-      navigator.clipboard.writeText(text).then(()=>toast('已复制到剪贴板')).catch(()=>toast('复制失败，请手动复制'));
+    function setText(id, text) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = (text === undefined || text === null || text === '') ? '-' : String(text);
     }
 
-    // ----------------------------
-    // App State
-    // ----------------------------
-    const DEFAULT = {
-      name: '雾培装置',
-      deviceId: '',
-      wsUrl: 'wss://broker.emqx.io:8084/mqtt',
-      subTopic: 'home/data',
-      pubTopic: 'home/control',
-      clientId: '',
-      tMin: 22,
-      tMax: 26,
-      hMin: 60,
-      hMax: 85,
-    };
-
-    const LS_KEY = 'aero_web_cfg_v3';
-
-    function loadCfg(){
-      try{
-        const raw = localStorage.getItem(LS_KEY);
-        if(!raw) return {...DEFAULT};
-        const obj = JSON.parse(raw);
-        return {...DEFAULT, ...obj};
-      }catch(e){
-        return {...DEFAULT};
-      }
+    function fmtNum(v, suffix) {
+      if (v === undefined || v === null || v === '') return '-';
+      var n = Number(v);
+      if (!isFinite(n)) return String(v);
+      var s = n;
+      return String(s) + (suffix || '');
     }
 
-    function saveCfg(cfg){
-      localStorage.setItem(LS_KEY, JSON.stringify(cfg));
-    }
+    function render() {
+      // tags
+      setTag('devTag', 'deviceId: ' + (state.deviceId || '-'));
 
-    const cfg = loadCfg();
+      var stm32Online = (state.stm32Online === true || state.stm32Online === 1 || state.stm32Online === 'true');
+      setTag('stm32Tag', 'STM32: ' + (stm32Online ? '在线' : '离线'), stm32Online ? 'ok' : 'bad');
 
-    // URL params
-    const params = new URLSearchParams(location.search);
-    const urlDeviceId = params.get('deviceId') || '';
-    const urlAutoconnect = params.get('autoconnect') === '1';
-    const urlHideCfg = params.get('hidecfg') === '1';
-    const urlKiosk = params.get('kiosk') === '1' || location.hash.includes('kiosk');
+      var rxOk = (state.rxOk !== undefined) ? state.rxOk : '-';
+      var crcErr = (state.crcErr !== undefined) ? state.crcErr : '-';
+      setTag('diagTag', 'rxOk: ' + rxOk + ' / crcErr: ' + crcErr);
 
-    if(urlDeviceId) cfg.deviceId = urlDeviceId;
-    if(urlKiosk) document.body.classList.add('kiosk');
-    if(urlHideCfg){
-      $('#btnSettings').style.display = 'none';
-      $('#btnOpenSettings').style.display = 'none';
-      $('#hintBox').textContent = '评委展示模式：设置已隐藏。若需修改配置，请去掉 hidecfg 参数。';
-    }
+      // metrics
+      setText('tempValue', fmtNum(state.temp, ' ℃'));
+      setText('humValue', fmtNum(state.hum, ' %RH'));
+      setText('luxValue', fmtNum(state.lux, ' lx'));
+      setText('ecValue', fmtNum(state.ec, ''));
+      setText('phValue', fmtNum(state.ph, ''));
+      setText('waterValue', fmtNum(state.water, ' L'));
+      setText('runtimeValue', fmtNum(state.runtime, ' h'));
+      setText('sensorValue', (state.sensorState === true || state.sensorState === 1) ? '感应到' : (state.sensorState === false || state.sensorState === 0 ? '未感应到' : '-'));
+      setText('mistValue', (state.mistEnable === true || state.mistEnable === 1) ? '开启' : (state.mistEnable === false || state.mistEnable === 0 ? '关闭' : '-'));
+      setText('mistDutyValue', fmtNum(state.mistDuty, ' %'));
+      setText('fanValue', (state.fan === true || state.fan === 1) ? '开启' : (state.fan === false || state.fan === 0 ? '关闭' : (state.fanSpeed !== undefined ? fmtNum(state.fanSpeed, ' %') : '-')));
+      setText('pwmValue', fmtNum(state.lightPWM, ' %'));
+      // 新增水位与液位RSSI
+      setText('waterLevelStateValue', fmtNum(state.waterLevelState, ''));
+      setText('lvRssiValue', fmtNum(state.lvRssi, ''));
 
-    // Runtime data
-    const state = {
-      connected: false,
-      lastRx: 0,
-      data: {
-        deviceId: null,
-        temp: null,
-        hum: null,
-        fanOn: null,
-        heaterOn: null,
-        fanSpeed: null,
-      },
-      history: [], // {t:number,temp:number|null,hum:number|null}
-      events: [],
-    };
+      // toggles
+      var fanToggle = document.getElementById('fanToggle');
+      var heaterToggle = document.getElementById('heaterToggle');
+      if (fanToggle && (state.fan === true || state.fan === false)) fanToggle.checked = !!state.fan;
+      if (heaterToggle && (state.heater === true || state.heater === false)) heaterToggle.checked = !!state.heater;
 
-    const MAX_POINTS = 420; // enough for demo smoothness
-    const MAX_EVENTS = 60;
-
-    // ----------------------------
-    // UI binding
-    // ----------------------------
-    function renderHeader(){
-      const online = state.connected ? '已连接' : '未连接';
-      $('#statusText').textContent = online;
-      const dot = $('#statusDot');
-      dot.classList.remove('ok','warn');
-      if(state.connected) dot.classList.add('ok');
-
-      const devName = cfg.name ? cfg.name : '未命名设备';
-      $('#bDevice').textContent = '设备：' + devName;
-      $('#cDevice').textContent = devName;
-
-      $('#sTemp').textContent = `目标：${cfg.tMin}–${cfg.tMax}℃`;
-      $('#sHum').textContent = `目标：${cfg.hMin}–${cfg.hMax}%RH`;
-
-      $('#bMode').textContent = (urlHideCfg || document.body.classList.contains('kiosk')) ? '评委' : '展示';
-    }
-
-    function renderData(){
-      $('#vTemp').textContent = fmt1(state.data.temp);
-      $('#vHum').textContent = fmt0(state.data.hum);
-      $('#vFan').textContent = state.data.fanOn===null ? '--' : (state.data.fanOn ? '开启' : '关闭');
-      $('#vHeater').textContent = state.data.heaterOn===null ? '--' : (state.data.heaterOn ? '开启' : '关闭');
-      $('#sFan').textContent = '风速：' + (state.data.fanSpeed===null ? '--' : state.data.fanSpeed);
-
-      const last = state.lastRx ? new Date(state.lastRx).toLocaleTimeString() : '--';
-      $('#bLast').textContent = last;
-      $('#sOnline').textContent = state.lastRx ? ('在线：' + last) : '在线：--';
-
-      $('#pCache').textContent = String(state.history.length);
-      $('#pSource').textContent = state.connected ? 'MQTT' : '离线';
-
-      // Sync toggles
-      setToggle($('#tgFan'), !!state.data.fanOn);
-      setToggle($('#tgHeater'), !!state.data.heaterOn);
-
-      // AI
-      renderAI();
-
-      // Stats
-      renderStats();
-    }
-
-    function renderEvents(){
-      const ul = $('#events');
-      ul.innerHTML = '';
-      const list = state.events.slice(0, MAX_EVENTS);
-      for(const e of list){
-        const li = document.createElement('li');
-        li.className = 'ev';
-        li.innerHTML = `
-          <div class="evIcon">${iconFor(e.type)}</div>
-          <div class="evMain">
-            <div class="evTitle">${escapeHtml(e.title)}</div>
-            <div class="evSub">${escapeHtml(e.sub || '')}</div>
-          </div>
-          <div class="evTime">${new Date(e.ts).toLocaleTimeString()}</div>
-        `;
-        ul.appendChild(li);
-      }
-    }
-
-    function iconFor(type){
-      const base = (path) => `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">${path}</svg>`;
-      if(type==='connect') return base(`<path d="M6 12H18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8 7L4 12L8 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 7L20 12L16 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`);
-      if(type==='rx') return base(`<path d="M7 12H17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 7V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>`);
-      if(type==='tx') return base(`<path d="M12 19V5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 10L12 5L17 10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`);
-      if(type==='warn') return base(`<path d="M12 9V13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 17H12.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M10.3 4.7L3.3 18.7C2.9 19.5 3.5 20.5 4.4 20.5H19.6C20.5 20.5 21.1 19.5 20.7 18.7L13.7 4.7C13.3 3.9 12.1 3.9 11.7 4.7Z" stroke="currentColor" stroke-width="1.4"/>`);
-      return base(`<path d="M12 21C16.97 21 21 16.97 21 12C21 7.03 16.97 3 12 3C7.03 3 3 7.03 3 12C3 16.97 7.03 21 12 21Z" stroke="currentColor" stroke-width="1.8"/>`);
-    }
-
-    function escapeHtml(s){
-      return String(s).replace(/[&<>"']/g, (c)=>({
-        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-      }[c]));
-    }
-
-    function pushEvent(type, title, sub=''){
-      state.events.unshift({ts: Date.now(), type, title, sub});
-      state.events = state.events.slice(0, MAX_EVENTS);
-      renderEvents();
-    }
-
-    // ----------------------------
-    // Charts
-    // ----------------------------
-    let chartEnv, chartTrend;
-
-    function makeCharts(){
-      const ctx1 = $('#chartEnv');
-      const ctx2 = $('#chartTrend');
-
-      const common = {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        plugins:{legend:{display:true, labels:{boxWidth:10, boxHeight:10}}, tooltip:{mode:'index', intersect:false}},
-        scales:{
-          x:{display:true, grid:{color:'rgba(10,20,36,.06)'}, ticks:{maxTicksLimit:6}},
-          y:{display:true, grid:{color:'rgba(10,20,36,.06)'}}
+      // raw
+      var rawPre = document.getElementById('rawPre');
+      if (rawPre) {
+        try {
+          rawPre.textContent = JSON.stringify(state, null, 2);
+        } catch (e) {
+          rawPre.textContent = String(state);
         }
-      };
+      }
+    }
 
-      chartEnv = new Chart(ctx1, {
-        type:'line',
-        data:{labels:[], datasets:[
-          {label:'温度 (℃)', data:[], borderColor:'rgba(15,109,255,.95)', backgroundColor:'rgba(15,109,255,.12)', tension:.35, fill:true, pointRadius:0, borderWidth:2},
-          {label:'湿度 (%RH)', data:[], borderColor:'rgba(21,185,126,.95)', backgroundColor:'rgba(21,185,126,.10)', tension:.35, fill:true, pointRadius:0, borderWidth:2, yAxisID:'y2'}
-        ]},
-        options:{
-          ...common,
-          scales:{
-            ...common.scales,
-            y:{position:'left', suggestedMin:0},
-            y2:{position:'right', suggestedMin:0, grid:{drawOnChartArea:false}}
+    console.log('Connecting to MQTT broker:', MQTT_BROKER);
+    var client = mqtt.connect(MQTT_BROKER);
+
+    client.on('connect', function () {
+      console.log('Connected');
+      setTag('connTag', 'MQTT 已连接', 'ok');
+      client.subscribe(TOPIC_DATA, function (err) {
+        if (err) console.error('Subscribe error:', err);
+        else console.log('Subscribed:', TOPIC_DATA);
+      });
+    });
+
+    client.on('reconnect', function () {
+      setTag('connTag', 'MQTT 重连中...', '');
+    });
+
+    client.on('close', function () {
+      setTag('connTag', 'MQTT 已断开', 'bad');
+    });
+
+    client.on('error', function (err) {
+      console.error('MQTT error:', err);
+      setTag('connTag', 'MQTT 错误', 'bad');
+    });
+
+    client.on('message', function (topic, message) {
+      if (topic !== TOPIC_DATA) return;
+      var txt = '';
+      try { txt = message.toString(); } catch (e) { txt = '' + message; }
+      try {
+        var obj = JSON.parse(txt);
+        if (obj && typeof obj === 'object') {
+          // 合并多包：后来的字段覆盖旧字段
+          for (var k in obj) {
+            if (Object.prototype.hasOwnProperty.call(obj, k)) {
+              state[k] = obj[k];
+            }
           }
         }
-      });
-
-      chartTrend = new Chart(ctx2, {
-        type:'line',
-        data:{labels:[], datasets:[
-          {label:'温度 (℃)', data:[], borderColor:'rgba(15,109,255,.95)', backgroundColor:'rgba(15,109,255,.10)', tension:.35, fill:true, pointRadius:0, borderWidth:2},
-          {label:'湿度 (%RH)', data:[], borderColor:'rgba(21,185,126,.95)', backgroundColor:'rgba(21,185,126,.08)', tension:.35, fill:true, pointRadius:0, borderWidth:2, yAxisID:'y2'}
-        ]},
-        options:{
-          ...common,
-          scales:{
-            ...common.scales,
-            y:{position:'left'},
-            y2:{position:'right', grid:{drawOnChartArea:false}}
-          }
-        }
-      });
-
-      // Ensure canvases have height in CSS
-      ctx1.parentElement.style.height = '220px';
-      ctx2.parentElement.style.height = '260px';
-    }
-
-    function updateCharts(){
-      if(!chartEnv || !chartTrend) return;
-      const points = state.history.slice(-MAX_POINTS);
-      chartEnv.data.labels = points.map(p => new Date(p.t).toLocaleTimeString());
-      chartEnv.data.datasets[0].data = points.map(p => p.temp);
-      chartEnv.data.datasets[1].data = points.map(p => p.hum);
-      chartEnv.update('none');
-
-      // Trend uses same points for now; could be longer window later
-      chartTrend.data.labels = chartEnv.data.labels;
-      chartTrend.data.datasets[0].data = chartEnv.data.datasets[0].data;
-      chartTrend.data.datasets[1].data = chartEnv.data.datasets[1].data;
-      chartTrend.update('none');
-    }
-
-    // ----------------------------
-    // AI (rule engine)
-    // ----------------------------
-    function renderAI(){
-      const t = state.data.temp;
-      const h = state.data.hum;
-      const ok = (v)=> v!==null && v!==undefined && !Number.isNaN(v);
-
-      const list = [];
-      let level = '等待';
-      let title = '等待数据…';
-      let text = '连接设备后，这里会给出基于目标窗口的建议。';
-
-      if(ok(t) && ok(h)){
-        const tLow = t < cfg.tMin;
-        const tHigh = t > cfg.tMax;
-        const hLow = h < cfg.hMin;
-        const hHigh = h > cfg.hMax;
-
-        // Simple reasoning
-        const hints = [];
-        if(tLow) hints.push('温度偏低：可考虑开启加热或减少通风。');
-        if(tHigh) hints.push('温度偏高：可考虑开启风扇加强换气。');
-        if(hLow) hints.push('湿度偏低：可考虑提高喷雾频率（待 STM32 接入）。');
-        if(hHigh) hints.push('湿度偏高：可考虑加强通风、降低喷雾。');
-
-        if(hints.length===0){
-          level='良好';
-          title='环境处于目标窗口内';
-          text='当前温湿度稳定，适合持续生长。建议保持现有策略，并观察趋势是否平稳。';
-          list.push('建议：使用大屏模式展示稳定曲线与控制效果。');
-        }else{
-          level='关注';
-          title='检测到环境偏离目标窗口';
-          text='系统可通过执行器进行快速调整。你可以在「智控中心」一键处理。';
-          for(const h1 of hints) list.push(h1);
-        }
-
-        // Add extra product-style bullets
-        list.push('展示要点：我们已打通“设备 → 公网 MQTT → Web 看板/智控”链路。');
-        list.push('下一步：对接 STM32 获取真实传感数据，并开放喷雾/补光闭环控制。');
+        render();
+      } catch (e) {
+        console.warn('Invalid JSON:', txt);
       }
-
-      $('#aiTitle').textContent = title;
-      $('#aiText').textContent = text;
-      const ul = $('#aiList');
-      ul.innerHTML = '';
-      for(const s of list){
-        const li = document.createElement('li');
-        li.textContent = s;
-        ul.appendChild(li);
-      }
-
-      // Pill
-      const pill = $('#aiPill');
-      pill.textContent = level;
-      if(level==='良好') pill.style.borderColor = 'rgba(18,183,106,.25)';
-      else if(level==='关注') pill.style.borderColor = 'rgba(255,176,32,.25)';
-      else pill.style.borderColor = 'rgba(10,20,36,.10)';
-    }
-
-    // ----------------------------
-    // Statistics
-    // ----------------------------
-    function minmaxavg(arr){
-      const xs = arr.filter(v => Number.isFinite(v));
-      if(xs.length===0) return {min:null,max:null,avg:null};
-      let min=xs[0], max=xs[0], sum=0;
-      for(const v of xs){ if(v<min)min=v; if(v>max)max=v; sum+=v; }
-      return {min,max,avg: sum/xs.length};
-    }
-
-    function renderStats(){
-      const temps = state.history.map(p=>p.temp);
-      const hums = state.history.map(p=>p.hum);
-      const stT = minmaxavg(temps);
-      const stH = minmaxavg(hums);
-
-      const fmt = (a,b,c,unit) => {
-        if(a===null||b===null||c===null) return '--';
-        return `${fmt1(a)} / ${fmt1(b)} / ${fmt1(c)}${unit}`;
-      };
-
-      $('#stTemp').textContent = fmt(stT.min, stT.max, stT.avg, '℃');
-      $('#stHum').textContent = fmt(stH.min, stH.max, stH.avg, '%');
-
-      $('#kTemp').textContent = (stT.min===null)?'--':`${fmt1(stT.min)}–${fmt1(stT.max)}℃`;
-      $('#kHum').textContent = (stH.min===null)?'--':`${fmt0(stH.min)}–${fmt0(stH.max)}%`;
-
-      // variance in last 5 min
-      const now = Date.now();
-      const recent = state.history.filter(p => now - p.t <= 5*60*1000);
-      const tR = minmaxavg(recent.map(p=>p.temp));
-      const hR = minmaxavg(recent.map(p=>p.hum));
-      if(tR.min===null || hR.min===null){
-        $('#kVar').textContent = '--';
-      }else{
-        const tVar = Math.abs(tR.max - tR.min);
-        const hVar = Math.abs(hR.max - hR.min);
-        $('#kVar').textContent = `${fmt1(tVar)}℃ / ${fmt0(hVar)}%`;
-      }
-    }
-
-    // ----------------------------
-    // Router
-    // ----------------------------
-    function setView(name){
-      $$('.view').forEach(v => v.classList.toggle('active', v.dataset.view===name));
-      $$('.nav a').forEach(a => a.classList.toggle('active', a.dataset.view===name));
-      if(name==='control') location.hash = '#control';
-      if(name==='overview') location.hash = '#overview';
-      if(name==='insights') location.hash = '#insights';
-      if(name==='about') location.hash = '#about';
-    }
-
-    $$('.nav a').forEach(a => a.addEventListener('click', (e)=>{
-      e.preventDefault();
-      setView(a.dataset.view);
-    }));
-
-    // ----------------------------
-    // Modal
-    // ----------------------------
-    function openModal(){
-      if(urlHideCfg){ toast('评委模式已隐藏设置'); return; }
-      $('#modalMask').classList.add('show');
-      $('#modalMask').setAttribute('aria-hidden','false');
-    }
-    function closeModal(){
-      $('#modalMask').classList.remove('show');
-      $('#modalMask').setAttribute('aria-hidden','true');
-    }
-
-    $('#btnSettings').addEventListener('click', openModal);
-    $('#btnOpenSettings').addEventListener('click', openModal);
-    $('#btnCloseModal').addEventListener('click', closeModal);
-    $('#modalMask').addEventListener('click', (e)=>{ if(e.target.id==='modalMask') closeModal(); });
-
-    // Fill modal inputs
-    function fillModal(){
-      $('#cfgName').value = cfg.name || '';
-      $('#cfgDeviceId').value = cfg.deviceId || '';
-      $('#cfgTmin').value = cfg.tMin;
-      $('#cfgTmax').value = cfg.tMax;
-      $('#cfgHmin').value = cfg.hMin;
-      $('#cfgHmax').value = cfg.hMax;
-
-      $('#cfgWs').value = cfg.wsUrl;
-      $('#cfgClientId').value = cfg.clientId;
-      $('#cfgSub').value = cfg.subTopic;
-      $('#cfgPub').value = cfg.pubTopic;
-    }
-
-    function readModal(){
-      cfg.name = ($('#cfgName').value || '').trim() || DEFAULT.name;
-      cfg.deviceId = ($('#cfgDeviceId').value || '').trim();
-
-      cfg.tMin = clamp(safeNum($('#cfgTmin').value) ?? DEFAULT.tMin, -20, 80);
-      cfg.tMax = clamp(safeNum($('#cfgTmax').value) ?? DEFAULT.tMax, -20, 80);
-      cfg.hMin = clamp(safeNum($('#cfgHmin').value) ?? DEFAULT.hMin, 0, 100);
-      cfg.hMax = clamp(safeNum($('#cfgHmax').value) ?? DEFAULT.hMax, 0, 100);
-
-      cfg.wsUrl = ($('#cfgWs').value || '').trim() || DEFAULT.wsUrl;
-      cfg.clientId = ($('#cfgClientId').value || '').trim();
-      cfg.subTopic = ($('#cfgSub').value || '').trim() || DEFAULT.subTopic;
-      cfg.pubTopic = ($('#cfgPub').value || '').trim() || DEFAULT.pubTopic;
-
-      // Keep sane ordering
-      if(cfg.tMin > cfg.tMax){ const t = cfg.tMin; cfg.tMin = cfg.tMax; cfg.tMax = t; }
-      if(cfg.hMin > cfg.hMax){ const t = cfg.hMin; cfg.hMin = cfg.hMax; cfg.hMax = t; }
-    }
-
-    $('#btnSave').addEventListener('click', ()=>{
-      readModal();
-      saveCfg(cfg);
-      renderHeader();
-      renderData();
-      toast('已保存');
     });
 
-    // ----------------------------
-    // MQTT
-    // ----------------------------
-    let client = null;
-
-    function buildClientId(){
-      if(cfg.clientId) return cfg.clientId;
-      const s = Math.random().toString(16).slice(2,10);
-      return 'web-' + s;
-    }
-
-    function connect(){
-      if(state.connected) return;
-      const cid = buildClientId();
-      const url = cfg.wsUrl;
-
-      try{
-        client = mqtt.connect(url, {
-          clientId: cid,
-          reconnectPeriod: 1500,
-          connectTimeout: 8000,
-          clean: true,
-        });
-      }catch(e){
-        toast('连接失败：URL 无效');
-        pushEvent('warn','连接失败','请检查 MQTT WebSocket URL');
-        return;
-      }
-
-      pushEvent('connect','正在连接云端…','准备接收设备实时数据');
-
-      client.on('connect', ()=>{
-        state.connected = true;
-        renderHeader();
-        toast('已连接');
-        pushEvent('connect','已连接','云端链路已建立');
-        client.subscribe(cfg.subTopic, {qos:0}, (err)=>{
-          if(err){
-            pushEvent('warn','订阅失败','请检查 Topic 配置');
-          }
-        });
-      });
-
-      client.on('reconnect', ()=>{
-        // no noisy toasts
-        $('#statusDot').classList.remove('ok');
-        $('#statusDot').classList.add('warn');
-        $('#statusText').textContent = '重连中';
-      });
-
-      client.on('close', ()=>{
-        state.connected = false;
-        renderHeader();
-        pushEvent('warn','连接已断开','请检查网络或重新连接');
-      });
-
-      client.on('error', (err)=>{
-        pushEvent('warn','连接错误', String(err && err.message ? err.message : err));
-      });
-
-      client.on('message', (topic, payload)=>{
-        handleMessage(topic, payload);
-      });
-    }
-
-    function disconnect(){
-      if(client){
-        try{ client.end(true); }catch(e){}
-      }
-      client = null;
-      state.connected = false;
-      renderHeader();
-      toast('已断开');
-      pushEvent('warn','已断开连接','');
-    }
-
-    function handleMessage(topic, payload){
-      let obj = null;
-      try{
-        const txt = payload instanceof Uint8Array ? new TextDecoder().decode(payload) : String(payload);
-        obj = JSON.parse(txt);
-      }catch(e){
-        return;
-      }
-
-      // deviceId filter
-      const msgDeviceId = obj.deviceId || obj.id || obj.clientId || null;
-      if(cfg.deviceId && msgDeviceId && String(msgDeviceId) !== String(cfg.deviceId)){
-        return; // ignore other devices
-      }
-
-      // Extract fields (support multiple naming)
-      const temp = safeNum(obj.tempC ?? obj.temp ?? obj.temperature ?? obj.t);
-      const hum = safeNum(obj.hum ?? obj.humidity ?? obj.rh ?? obj.h);
-
-      const fanOn = (obj.fanOn ?? obj.fan ?? obj.fan_state ?? obj.fanState);
-      const heaterOn = (obj.heaterOn ?? obj.heater ?? obj.heater_state ?? obj.heaterState);
-      const fanSpeed = safeNum(obj.fanSpeed ?? obj.speed ?? obj.fan_speed);
-
-      // Update state
-      state.data.deviceId = msgDeviceId;
-      if(temp!==null) state.data.temp = temp;
-      if(hum!==null) state.data.hum = hum;
-      if(fanOn!==undefined && fanOn!==null) state.data.fanOn = !!fanOn;
-      if(heaterOn!==undefined && heaterOn!==null) state.data.heaterOn = !!heaterOn;
-      if(fanSpeed!==null) state.data.fanSpeed = fanSpeed;
-
-      state.lastRx = Date.now();
-
-      // History
-      state.history.push({t: state.lastRx, temp: state.data.temp, hum: state.data.hum});
-      if(state.history.length > 1500) state.history = state.history.slice(-1500);
-
-      renderData();
-      updateCharts();
-
-      // status dot
-      $('#statusDot').classList.remove('warn');
-      $('#statusDot').classList.add('ok');
-      $('#statusText').textContent = '已连接';
-
-      // event (throttle)
-      if(!handleMessage._lastEv || (Date.now()-handleMessage._lastEv > 8000)){
-        pushEvent('rx','收到设备数据', `温度 ${fmt1(state.data.temp)}℃ · 湿度 ${fmt0(state.data.hum)}%`);
-        handleMessage._lastEv = Date.now();
-      }
-    }
-
-    function publishControl(device, stateOn, extra={}){
-      if(!client || !state.connected){ toast('未连接'); return; }
-      const msg = {
-        device,
-        state: !!stateOn,
-        ...extra,
-      };
-      if(cfg.deviceId) msg.deviceId = cfg.deviceId;
-
-      const payload = JSON.stringify(msg);
-      client.publish(cfg.pubTopic, payload, {qos:0}, (err)=>{
-        if(err){
-          pushEvent('warn','下发失败','请检查网络');
-          toast('下发失败');
-          return;
-        }
-        pushEvent('tx','已下发控制', `${device} → ${stateOn? '开启':'关闭'}`);
-        toast('已下发');
-      });
-    }
-
-    // ----------------------------
-    // Controls
-    // ----------------------------
-    function setToggle(el, on){
-      el.classList.toggle('on', !!on);
-      el.setAttribute('aria-checked', on ? 'true' : 'false');
-    }
-
-    function toggleClick(el, key){
-      const on = el.classList.contains('on');
-      const next = !on;
-      setToggle(el, next);
-
-      if(key==='fan'){
-        const speed = Number($('#fanSpeed').value);
-        publishControl('fan', next, {fanSpeed: speed});
-      }else if(key==='heater'){
-        publishControl('heater', next);
-      }
-    }
-
-    $('#tgFan').addEventListener('click', ()=>toggleClick($('#tgFan'),'fan'));
-    $('#tgHeater').addEventListener('click', ()=>toggleClick($('#tgHeater'),'heater'));
-
-    $('#fanSpeed').addEventListener('input', ()=>{
-      $('#fanSpeedTxt').textContent = $('#fanSpeed').value;
+    // 控制
+    document.getElementById('fanToggle').addEventListener('change', function () {
+      var value = !!this.checked;
+      var obj = { type: 'control', device: 'fan', state: value };
+      if (state.deviceId) obj.deviceId = state.deviceId;
+      var cmd = JSON.stringify(obj);
+      client.publish(TOPIC_CONTROL, cmd);
+      console.log('Sent fan control:', cmd);
     });
 
-    // Presets
-    function applyPreset(name){
-      if(name==='seed'){
-        // gentle ventilation
-        publishControl('fan', true, {fanSpeed: 1});
-        publishControl('heater', false);
-        toast('已应用：育苗');
-      }
-      if(name==='grow'){
-        publishControl('fan', true, {fanSpeed: 2});
-        publishControl('heater', false);
-        toast('已应用：生长');
-      }
-      if(name==='eco'){
-        publishControl('fan', true, {fanSpeed: 1});
-        publishControl('heater', false);
-        toast('已应用：节能');
-      }
-      pushEvent('tx','一键模板', name);
-    }
-
-    $('#presetRow').addEventListener('click', (e)=>{
-      const p = e.target.closest('.preset');
-      if(!p) return;
-      applyPreset(p.dataset.preset);
+    document.getElementById('heaterToggle').addEventListener('change', function () {
+      var value = !!this.checked;
+      var obj = { type: 'control', device: 'heater', state: value };
+      if (state.deviceId) obj.deviceId = state.deviceId;
+      var cmd = JSON.stringify(obj);
+      client.publish(TOPIC_CONTROL, cmd);
+      console.log('Sent heater control:', cmd);
     });
 
-    $('#btnEStop').addEventListener('click', ()=>{
-      publishControl('fan', false);
-      publishControl('heater', false);
-      toast('已急停');
-      pushEvent('warn','急停触发','风扇/加热已关闭');
-    });
-
-    // ----------------------------
-    // Share link
-    // ----------------------------
-    function buildJudgeLink(extra={}){
-      const u = new URL(location.href);
-      const p = u.searchParams;
-      p.set('autoconnect','1');
-      p.set('hidecfg','1');
-      if(cfg.deviceId) p.set('deviceId', cfg.deviceId);
-      if(extra.kiosk) u.hash = '#kiosk';
-      else if(!u.hash) u.hash = '#overview';
-      return u.toString();
-    }
-
-    $('#btnShare').addEventListener('click', ()=>{
-      copy(buildJudgeLink({kiosk:false}));
-    });
-    $('#btnCopyJudge').addEventListener('click', ()=>copy(buildJudgeLink({kiosk:true})));
-    $('#btnCopyLink').addEventListener('click', ()=>copy(buildJudgeLink({kiosk:false})));
-    $('#btnCopyAbout').addEventListener('click', ()=>copy(buildJudgeLink({kiosk:true})));
-
-    // Export CSV
-    function exportCSV(){
-      const rows = [['ts','time','tempC','hum','fanOn','heaterOn','fanSpeed','deviceId']];
-      for(const p of state.history){
-        rows.push([
-          String(p.t),
-          new Date(p.t).toISOString(),
-          p.temp ?? '',
-          p.hum ?? '',
-          state.data.fanOn ?? '',
-          state.data.heaterOn ?? '',
-          state.data.fanSpeed ?? '',
-          state.data.deviceId ?? ''
-        ]);
-      }
-      const csv = rows.map(r=>r.map(x=>String(x).replace(/\"/g,'""')).join(',')).join('\n');
-      const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'aeroponic_demo.csv';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
-    }
-    $('#btnExport').addEventListener('click', exportCSV);
-
-    // Clear
-    $('#btnClear').addEventListener('click', ()=>{
-      state.history = [];
-      state.events = [];
-      renderEvents();
-      updateCharts();
-      renderStats();
-      toast('已清空');
-    });
-
-    // Kiosk button
-    $('#btnKiosk').addEventListener('click', ()=>{
-      document.body.classList.toggle('kiosk');
-      toast(document.body.classList.contains('kiosk') ? '已进入大屏' : '已退出大屏');
-    });
-
-    // Start/connect buttons
-    function startFlow(){
-      if(!state.connected){
-        if(urlHideCfg){
-          // in judge mode, just connect with current cfg
-          connect();
-        }else{
-          fillModal();
-          openModal();
-        }
-      }else{
-        toast('已连接，开始展示');
-      }
-    }
-
-    $('#btnStart').addEventListener('click', startFlow);
-    $('#btnStart2').addEventListener('click', startFlow);
-    $('#btnGoControl').addEventListener('click', ()=>setView('control'));
-    $('#btnBrand').addEventListener('click', ()=>setView('overview'));
-
-    $('#btnConnect').addEventListener('click', ()=>{
-      readModal();
-      saveCfg(cfg);
-      closeModal();
-      renderHeader();
-      renderData();
-      connect();
-    });
-    $('#btnDisconnect').addEventListener('click', ()=>{ disconnect(); renderData(); });
-
-    // ----------------------------
-    // Init
-    // ----------------------------
-    fillModal();
-    makeCharts();
-
-    // boot events
-    pushEvent('connect','页面已打开','准备进入演示');
-
-    // if deviceId is provided via URL, show it
-    if(cfg.deviceId){
-      pushEvent('connect','已锁定 deviceId', cfg.deviceId);
-    }
-
-    renderHeader();
-    renderData();
-    renderEvents();
-
-    // Autoconnect
-    if(urlAutoconnect){
-      connect();
-      toast('自动连接中…');
-    }
-
-    // Hash routing
-    function routeFromHash(){
-      const h = (location.hash||'').replace('#','');
-      if(h==='control') setView('control');
-      else if(h==='insights') setView('insights');
-      else if(h==='about') setView('about');
-      else setView('overview');
-    }
-    window.addEventListener('hashchange', routeFromHash);
-    routeFromHash();
-
-    // Keep status updated (offline if no data for a while)
-    setInterval(()=>{
-      if(!state.connected) return;
-      if(state.lastRx && (Date.now() - state.lastRx > 12000)){
-        $('#statusDot').classList.remove('ok');
-        $('#statusDot').classList.add('warn');
-        $('#statusText').textContent = '在线但无数据';
-      }
-    }, 2000);
-
-    // expose for debugging if needed
-    window.__aero = {cfg, state, connect, disconnect};
+    // init
+    render();
   </script>
 </body>
 </html>
