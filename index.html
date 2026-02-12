@@ -1,674 +1,2337 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>雾境智培控制台</title>
-  <!--
-    新版 Web 控制台
-    设计理念：
-      - 使用现代的深色/浅色主题切换和统一的设计系统
-      - 左侧导航栏组织功能区：概览、控制、自动化、洞察、设备
-      - 卡片式仪表板展示关键指标，支持实时更新
-      - MQTT 连接配置可通过设置弹窗修改，无需刷新页面
-      - 使用 Chart.js 绘制趋势图，为数据洞察提供直观视图
-      - 所有控制组件均预留事件处理器，可与固件或云端 API 集成
-      - 不含任何内部讨论或调试文本，面向评委和公众展示
-  -->
-  <!-- 引入 Chart.js，用于绘制趋势图 -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
-  <!-- 引入 MQTT.js，用于浏览器 MQTT 连接 -->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0B1220" />
+  <title>雾境智培 · Web控制台</title>
+
+  <!-- CDN Libraries (static page, no build) -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
   <style>
-    /* 基础样式重置与变量定义 */
-    :root {
-      --color-bg: #f7f8fa;
-      --color-bg-alt: #ffffff;
-      --color-primary: #2f54eb;
-      --color-secondary: #13c2c2;
-      --color-text: #333;
-      --color-border: #e5e7eb;
-      --color-card-bg: #ffffff;
-      --color-card-shadow: rgba(0, 0, 0, 0.05);
-      --color-nav-bg: #fff;
-      --color-nav-hover: #f0f5ff;
-      --color-nav-active: #e6f7ff;
+    /* ----------------------
+       Design System
+    -----------------------*/
+    :root{
+      --bg0:#070B16;
+      --bg1:#0B1220;
+      --card:rgba(255,255,255,.06);
+      --card2:rgba(255,255,255,.08);
+      --border:rgba(255,255,255,.10);
+      --text:#EAF0FF;
+      --muted:rgba(234,240,255,.72);
+      --muted2:rgba(234,240,255,.55);
+      --brand:#5EEAD4;
+      --brand2:#60A5FA;
+      --ok:#34D399;
+      --warn:#FBBF24;
+      --bad:#FB7185;
+      --shadow: 0 18px 50px rgba(0,0,0,.35);
+      --radius:18px;
+      --radius2:14px;
+      --gap:14px;
+      --gap2:10px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
     }
-    body.dark {
-      --color-bg: #0d1117;
-      --color-bg-alt: #161b22;
-      --color-primary: #3b82f6;
-      --color-secondary: #10b981;
-      --color-text: #d1d5db;
-      --color-border: #30363d;
-      --color-card-bg: #161b22;
-      --color-card-shadow: rgba(0, 0, 0, 0.3);
-      --color-nav-bg: #161b22;
-      --color-nav-hover: #21262d;
-      --color-nav-active: #1f2937;
+
+    :root[data-theme="light"]{
+      --bg0:#F5F7FF;
+      --bg1:#EAF2FF;
+      --card:rgba(255,255,255,.78);
+      --card2:rgba(255,255,255,.92);
+      --border:rgba(15,23,42,.10);
+      --text:#0B1220;
+      --muted:rgba(11,18,32,.70);
+      --muted2:rgba(11,18,32,.55);
+      --shadow: 0 18px 50px rgba(15,23,42,.10);
     }
-    body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-      background-color: var(--color-bg);
-      color: var(--color-text);
-      display: flex;
-      height: 100vh;
-      overflow: hidden;
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:var(--sans);
+      color:var(--text);
+      background:
+        radial-gradient(1200px 680px at 10% 10%, rgba(94,234,212,.25), transparent 55%),
+        radial-gradient(1100px 680px at 90% 20%, rgba(96,165,250,.22), transparent 55%),
+        radial-gradient(800px 520px at 70% 90%, rgba(251,113,133,.12), transparent 55%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      overflow-x:hidden;
     }
-    /* 左侧导航 */
-    .sidebar {
-      width: 220px;
-      background-color: var(--color-nav-bg);
-      border-right: 1px solid var(--color-border);
-      display: flex;
-      flex-direction: column;
-      padding-top: 20px;
+
+    a{color:inherit;text-decoration:none}
+
+    .app{
+      display:grid;
+      grid-template-columns: 280px 1fr;
+      min-height:100vh;
     }
-    .sidebar .logo {
-      font-size: 20px;
-      font-weight: bold;
-      padding: 0 20px;
-      margin-bottom: 20px;
+
+    /* ----------------------
+       Sidebar
+    -----------------------*/
+    .sidebar{
+      position:sticky;
+      top:0;
+      height:100vh;
+      padding:18px;
+      border-right:1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,.03), transparent);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
     }
-    .sidebar ul {
-      list-style: none;
-      margin: 0;
-      padding: 0;
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:10px 10px 14px;
     }
-    .sidebar li {
-      padding: 12px 20px;
-      cursor: pointer;
-      border-left: 3px solid transparent;
-      transition: background 0.2s, border-color 0.2s;
+
+    .logo{
+      width:44px;height:44px;
+      border-radius:14px;
+      background:
+        radial-gradient(12px 12px at 30% 30%, rgba(255,255,255,.75), rgba(255,255,255,0) 55%),
+        linear-gradient(135deg, rgba(94,234,212,.90), rgba(96,165,250,.90));
+      box-shadow: 0 10px 25px rgba(96,165,250,.22);
+      display:grid;
+      place-items:center;
+      border:1px solid rgba(255,255,255,.22);
     }
-    .sidebar li:hover {
-      background-color: var(--color-nav-hover);
+
+    .logo svg{opacity:.96}
+
+    .brand h1{
+      margin:0;
+      font-size:16px;
+      letter-spacing:.2px;
+      line-height:1.15;
     }
-    .sidebar li.active {
-      border-color: var(--color-primary);
-      background-color: var(--color-nav-active);
+    .brand p{margin:3px 0 0; font-size:12px; color:var(--muted)}
+
+    .nav{
+      margin-top:8px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
     }
-    .sidebar li .icon {
-      margin-right: 8px;
+
+    .nav a{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:10px 12px;
+      border-radius:14px;
+      color:var(--muted);
+      border:1px solid transparent;
+      transition: .18s ease;
     }
-    /* 主内容区 */
-    .main {
-      flex: 1;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
+
+    .nav a:hover{
+      color:var(--text);
+      background: rgba(255,255,255,.05);
+      border-color: rgba(255,255,255,.08);
     }
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 20px;
-      border-bottom: 1px solid var(--color-border);
+
+    .nav a.active{
+      color:var(--text);
+      background: linear-gradient(135deg, rgba(94,234,212,.16), rgba(96,165,250,.12));
+      border-color: rgba(94,234,212,.18);
     }
-    header h1 {
-      margin: 0;
-      font-size: 24px;
+
+    .nav .ico{
+      width:18px;height:18px;
+      opacity:.95;
+      flex:0 0 auto;
     }
-    .theme-toggle {
-      cursor: pointer;
-      padding: 8px 12px;
-      background-color: var(--color-primary);
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      font-size: 14px;
+
+    .sideFooter{
+      position:absolute;
+      left:18px; right:18px; bottom:18px;
+      padding:12px;
+      border-radius: var(--radius);
+      border:1px solid var(--border);
+      background: var(--card);
+      box-shadow: var(--shadow);
     }
-    .page {
-      display: none;
-      padding: 20px;
+
+    .chipRow{display:flex; gap:8px; flex-wrap:wrap}
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:7px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      font-size:12px;
+      color:var(--muted);
     }
-    .page.active {
-      display: block;
+    .dot{width:8px;height:8px;border-radius:50%}
+    .dot.ok{background:var(--ok)}
+    .dot.bad{background:var(--bad)}
+    .dot.warn{background:var(--warn)}
+
+    .btn{
+      appearance:none;
+      border:none;
+      cursor:pointer;
+      color:var(--text);
+      background: linear-gradient(135deg, rgba(94,234,212,.26), rgba(96,165,250,.22));
+      border:1px solid rgba(94,234,212,.22);
+      padding:10px 12px;
+      border-radius:14px;
+      font-weight:600;
+      transition:.18s ease;
     }
-    /* 仪表板指标卡 */
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-      gap: 16px;
+    .btn:hover{transform: translateY(-1px); box-shadow: 0 14px 40px rgba(0,0,0,.22)}
+    .btn:active{transform: translateY(0)}
+
+    .btn.ghost{
+      background: rgba(255,255,255,.04);
+      border:1px solid var(--border);
+      color:var(--text);
+      font-weight:600;
     }
-    .card {
-      background-color: var(--color-card-bg);
-      border: 1px solid var(--color-border);
-      border-radius: 8px;
-      padding: 16px;
-      box-shadow: 0 1px 2px var(--color-card-shadow);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      height: 100px;
+
+    .btnRow{display:flex; gap:10px; margin-top:10px}
+
+    /* ----------------------
+       Main
+    -----------------------*/
+    .main{
+      padding:18px 18px 40px;
     }
-    .card .label {
-      font-size: 14px;
-      color: var(--color-text);
+
+    .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding: 8px 6px 16px;
     }
-    .card .value {
-      font-size: 28px;
-      font-weight: bold;
-      margin-top: 8px;
+
+    .titleBlock h2{
+      margin:0;
+      font-size:22px;
+      letter-spacing:.2px;
     }
-    /* 控制开关样式 */
-    .controls {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-      gap: 16px;
+
+    .titleBlock p{
+      margin:6px 0 0;
+      color:var(--muted);
+      font-size:13px;
     }
-    .control-item {
-      background-color: var(--color-card-bg);
-      border: 1px solid var(--color-border);
-      border-radius: 8px;
-      padding: 16px;
+
+    .topActions{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+
+    .search{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:10px 12px;
+      border-radius: 14px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      min-width: 240px;
     }
-    .control-item h3 {
-      margin-top: 0;
-      font-size: 16px;
+
+    .search input{
+      width:100%;
+      border:none;
+      outline:none;
+      background: transparent;
+      color: var(--text);
+      font-size:13px;
     }
-    .control-item button {
-      margin-right: 10px;
-      padding: 6px 14px;
-      border: none;
-      border-radius: 4px;
-      font-size: 14px;
-      cursor: pointer;
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: var(--gap);
+      align-items:stretch;
     }
-    /* 表单元素 */
-    .form-group {
-      margin-bottom: 12px;
+
+    .card{
+      border-radius: var(--radius);
+      border:1px solid var(--border);
+      background: var(--card);
+      box-shadow: var(--shadow);
+      overflow:hidden;
     }
-    .form-group label {
-      display: block;
-      margin-bottom: 4px;
-      font-weight: 500;
+
+    .cardHeader{
+      padding:16px 16px 10px;
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
     }
-    .form-group input,
-    .form-group select {
-      width: 100%;
-      padding: 6px 8px;
-      border: 1px solid var(--color-border);
-      border-radius: 4px;
-      background-color: var(--color-card-bg);
-      color: var(--color-text);
+
+    .cardHeader h3{
+      margin:0;
+      font-size:14px;
+      color: var(--muted);
+      font-weight:600;
+      letter-spacing:.2px;
     }
-    .form-group input[type="checkbox"] {
-      width: auto;
+
+    .cardBody{padding: 0 16px 16px}
+
+    .kpi{
+      display:flex;
+      align-items:baseline;
+      gap:10px;
+      margin-top:6px;
     }
-    /* 趋势图容器 */
-    .chart-container {
-      width: 100%;
-      max-height: 320px;
-      margin-bottom: 20px;
+
+    .kpi .value{
+      font-size:28px;
+      font-weight:700;
+      letter-spacing:.2px;
     }
-    /* 状态徽章 */
-    .badge {
-      display: inline-block;
-      padding: 4px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      margin-right: 6px;
+
+    .kpi .unit{
+      font-size:13px;
+      color: var(--muted);
+      font-weight:600;
     }
-    .badge.ok { background-color: #d9f7be; color: #389e0d; }
-    .badge.warn { background-color: #fff7e6; color: #d48806; }
-    .badge.error { background-color: #fff1f0; color: #cf1322; }
-    .inline {
-      display: inline-flex;
-      align-items: center;
+
+    .sub{
+      margin-top:10px;
+      color:var(--muted2);
+      font-size:12px;
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
     }
-    .inline svg {
-      margin-right: 4px;
+
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      font-size:12px;
+      color:var(--muted);
+      white-space:nowrap;
     }
-    /* 公用提示文字 */
-    .hint {
-      font-size: 12px;
-      color: #999;
-      margin-top: 8px;
+
+    .badge strong{color:var(--text)}
+
+    .sectionTitle{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin:18px 0 12px;
     }
+
+    .sectionTitle h3{margin:0;font-size:15px;letter-spacing:.2px}
+    .sectionTitle p{margin:0;color:var(--muted);font-size:12px}
+
+    /* Layout blocks */
+    .span-12{grid-column: span 12}
+    .span-8{grid-column: span 8}
+    .span-7{grid-column: span 7}
+    .span-6{grid-column: span 6}
+    .span-5{grid-column: span 5}
+    .span-4{grid-column: span 4}
+    .span-3{grid-column: span 3}
+
+    /* Control components */
+    .controlsGrid{display:grid; grid-template-columns: repeat(2,1fr); gap:12px}
+
+    .tile{
+      border-radius: 16px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      padding:12px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+
+    .tile h4{margin:0;font-size:13px}
+    .tile p{margin:4px 0 0;color:var(--muted);font-size:12px}
+
+    .switch{
+      position:relative;
+      width:52px; height:30px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      cursor:pointer;
+      transition:.18s ease;
+      flex:0 0 auto;
+    }
+
+    .switch::after{
+      content:"";
+      position:absolute;
+      top:3px; left:3px;
+      width:24px; height:24px;
+      border-radius:999px;
+      background: rgba(255,255,255,.85);
+      transition:.18s ease;
+      box-shadow: 0 10px 18px rgba(0,0,0,.25);
+    }
+
+    .switch.on{
+      background: linear-gradient(135deg, rgba(94,234,212,.45), rgba(96,165,250,.35));
+      border-color: rgba(94,234,212,.30);
+    }
+
+    .switch.on::after{left:25px; background: rgba(255,255,255,.96)}
+
+    .sliderRow{display:flex; align-items:center; gap:10px}
+    input[type="range"]{width:100%}
+
+    .pill{
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      font-size:12px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    /* Tabs */
+    .tabs{display:flex; gap:8px; flex-wrap:wrap}
+    .tab{
+      padding:8px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      font-size:12px;
+      color: var(--muted);
+      cursor:pointer;
+      transition:.16s ease;
+      user-select:none;
+    }
+    .tab:hover{color:var(--text)}
+    .tab.active{
+      color: var(--text);
+      background: linear-gradient(135deg, rgba(94,234,212,.20), rgba(96,165,250,.16));
+      border-color: rgba(94,234,212,.18);
+    }
+
+    /* Table */
+    .table{
+      width:100%;
+      border-collapse: collapse;
+      overflow:hidden;
+      border-radius: 14px;
+      border:1px solid var(--border);
+    }
+    .table th, .table td{
+      padding:10px 12px;
+      border-bottom:1px solid var(--border);
+      font-size:12px;
+      color: var(--muted);
+      text-align:left;
+      vertical-align: top;
+    }
+    .table th{color:var(--muted2); font-weight:600; background: rgba(255,255,255,.04)}
+    .table td strong{color:var(--text)}
+
+    /* Modal */
+    .modalMask{
+      position:fixed;
+      inset:0;
+      background: rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+      z-index: 50;
+    }
+    .modalMask.show{display:flex}
+
+    .modal{
+      width:min(760px, 92vw);
+      border-radius: 22px;
+      border:1px solid var(--border);
+      background: var(--card2);
+      box-shadow: 0 30px 90px rgba(0,0,0,.45);
+      overflow:hidden;
+    }
+
+    .modalHeader{
+      padding:16px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      border-bottom:1px solid var(--border);
+    }
+
+    .modalHeader h3{margin:0;font-size:14px}
+
+    .iconBtn{
+      width:38px;height:38px;
+      border-radius: 12px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      cursor:pointer;
+      display:grid;
+      place-items:center;
+      color: var(--muted);
+    }
+
+    .modalBody{padding:16px}
+
+    .form{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+    }
+
+    .field{
+      border-radius:16px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      padding:12px;
+    }
+
+    .field label{display:block;font-size:12px;color:var(--muted2);margin-bottom:6px}
+    .field input, .field select{
+      width:100%;
+      border:none;
+      outline:none;
+      background: transparent;
+      color: var(--text);
+      font-size:13px;
+    }
+
+    .modalFooter{
+      padding:16px;
+      border-top:1px solid var(--border);
+      display:flex;
+      gap:10px;
+      justify-content:flex-end;
+      flex-wrap:wrap;
+    }
+
+    /* Toast */
+    .toastHost{
+      position:fixed;
+      right:16px;
+      bottom:16px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      z-index: 60;
+    }
+
+    .toast{
+      width:min(380px, 92vw);
+      border-radius: 16px;
+      border:1px solid var(--border);
+      background: var(--card2);
+      box-shadow: var(--shadow);
+      padding:12px;
+      display:flex;
+      align-items:flex-start;
+      gap:10px;
+      animation: pop .22s ease;
+    }
+
+    @keyframes pop{from{transform: translateY(8px); opacity:0} to{transform:translateY(0); opacity:1}}
+
+    .toast .tTitle{font-weight:700;font-size:13px}
+    .toast .tMsg{margin-top:4px;color:var(--muted);font-size:12px;line-height:1.35}
+
+    .toast .x{
+      margin-left:auto;
+      width:28px;height:28px;
+      border-radius: 10px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      cursor:pointer;
+      display:grid;
+      place-items:center;
+      color:var(--muted);
+      flex:0 0 auto;
+    }
+
+    /* Responsive */
+    @media (max-width: 1040px){
+      .app{grid-template-columns: 1fr}
+      .sidebar{position:relative;height:auto;border-right:none;border-bottom:1px solid var(--border)}
+      .sideFooter{position:relative;left:auto;right:auto;bottom:auto;margin-top:12px}
+      .main{padding:14px}
+      .search{min-width: 180px}
+    }
+
+    @media (max-width: 760px){
+      .grid{grid-template-columns: repeat(6, 1fr)}
+      .span-8,.span-7,.span-6,.span-5,.span-4,.span-3{grid-column: span 6}
+      .controlsGrid{grid-template-columns: 1fr}
+      .form{grid-template-columns: 1fr}
+      .topbar{flex-direction:column; align-items:flex-start}
+      .topActions{width:100%}
+      .search{width:100%}
+    }
+
+    @media (prefers-reduced-motion: reduce){
+      *{transition:none !important; animation:none !important}
+    }
+
+    /* subtle skeleton */
+    .skeleton{
+      background: linear-gradient(90deg, rgba(255,255,255,.06), rgba(255,255,255,.12), rgba(255,255,255,.06));
+      background-size: 220% 100%;
+      animation: shimmer 1.15s infinite linear;
+      border-radius: 10px;
+      height: 14px;
+      width: 60%;
+      margin-top: 10px;
+    }
+    @keyframes shimmer{0%{background-position: 0% 0} 100%{background-position: 220% 0}}
+
+    /* hide/show sections */
+    .view{display:none}
+    .view.show{display:block}
+
+    /* accordions */
+    details{border-radius: 16px; border:1px solid var(--border); background: rgba(255,255,255,.04); overflow:hidden}
+    summary{cursor:pointer; padding:12px 14px; list-style:none; display:flex; align-items:center; justify-content:space-between; gap:10px; color:var(--text); font-weight:700; font-size:13px}
+    summary::-webkit-details-marker{display:none}
+    details .content{padding: 0 14px 12px; color:var(--muted); font-size:12px; line-height:1.4}
+    pre{margin:0; white-space:pre-wrap; word-break:break-word; font-family: var(--mono); font-size:12px; color: var(--muted)}
   </style>
 </head>
+
 <body>
-  <aside class="sidebar">
-    <div class="logo">雾境智培</div>
-    <ul>
-      <li class="active" data-page="dashboard">概览</li>
-      <li data-page="control">控制</li>
-      <li data-page="automation">自动化</li>
-      <li data-page="insights">洞察</li>
-      <li data-page="devices">设备</li>
-    </ul>
-  </aside>
-  <div class="main">
-    <header>
-      <h1 id="pageTitle">概览</h1>
-      <button class="theme-toggle" id="themeToggle">暗黑模式</button>
-    </header>
-    <!-- 概览页面 -->
-    <section id="page-dashboard" class="page active">
-      <div class="stats" id="stats">
-        <div class="card">
-          <div class="label">温度 (°C)</div>
-          <div class="value" id="tempValue">--</div>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C7.6 2 4 5.6 4 10c0 5.2 5.7 11.4 7.4 13.1.3.3.7.3 1 0C14.3 21.4 20 15.2 20 10c0-4.4-3.6-8-8-8Z" fill="rgba(11,18,32,.28)"/>
+            <path d="M12 6.5c-1.9 0-3.5 1.6-3.5 3.5 0 1.9 1.6 3.5 3.5 3.5s3.5-1.6 3.5-3.5c0-1.9-1.6-3.5-3.5-3.5Z" fill="rgba(11,18,32,.45)"/>
+          </svg>
         </div>
-        <div class="card">
-          <div class="label">湿度 (%)</div>
-          <div class="value" id="humValue">--</div>
-        </div>
-        <div class="card">
-          <div class="label">pH</div>
-          <div class="value" id="phValue">--</div>
-        </div>
-        <div class="card">
-          <div class="label">EC</div>
-          <div class="value" id="ecValue">--</div>
-        </div>
-        <div class="card">
-          <div class="label">光照 (Lux)</div>
-          <div class="value" id="luxValue">--</div>
-        </div>
-        <div class="card">
-          <div class="label">水位</div>
-          <div class="value" id="waterValue">--</div>
-        </div>
-        <div class="card">
-          <div class="label">液位RSSI</div>
-          <div class="value" id="rssiValue">--</div>
+        <div>
+          <h1>雾境智培</h1>
+          <p>环境监测 · 设备控制 · 数据洞察</p>
         </div>
       </div>
-      <div style="margin-top:20px;">
-        <span id="connStatus" class="badge warn">未连接</span>
-        <span id="stm32Status" class="badge warn">STM32 离线</span>
-        <span id="diagStatus" class="badge warn">rxOk: 0 / crcErr: 0</span>
+
+      <nav class="nav" id="nav">
+        <a href="#" class="active" data-view="overview">
+          <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M4 13.2V21h7v-7.8H4Zm9 0V21h7v-7.8h-7ZM4 3v8.2h7V3H4Zm9 0v8.2h7V3h-7Z" fill="currentColor" opacity=".9"/></svg>
+          概览
+        </a>
+        <a href="#" data-view="control">
+          <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M6 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm12 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM9 20h6a2 2 0 0 0 2-2v-3H7v3a2 2 0 0 0 2 2Zm0-16h6a2 2 0 0 1 2 2v1H7V6a2 2 0 0 1 2-2Z" fill="currentColor" opacity=".9"/></svg>
+          控制
+        </a>
+        <a href="#" data-view="automation">
+          <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 5v5.2l4 2.3-.9 1.6L11 13V7h2Z" fill="currentColor" opacity=".9"/></svg>
+          自动化
+        </a>
+        <a href="#" data-view="insights">
+          <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M4 19h16v2H4v-2Zm2-2h2V9H6v8Zm5 0h2V5h-2v12Zm5 0h2V12h-2v5Z" fill="currentColor" opacity=".9"/></svg>
+          数据
+        </a>
+        <a href="#" data-view="device">
+          <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm0 4v12h10V6H7Zm2 14h6v-1H9v1Z" fill="currentColor" opacity=".9"/></svg>
+          设备
+        </a>
+      </nav>
+
+      <div class="sideFooter">
+        <div class="chipRow" style="margin-bottom:10px">
+          <span class="chip" title="MQTT 连接状态"><span class="dot" id="mqttDot"></span><span id="mqttText">未连接</span></span>
+          <span class="chip" title="设备标识"><span class="dot" style="background:var(--brand2)"></span><span>deviceId: <span id="deviceIdText">-</span></span></span>
+          <span class="chip" title="STM32 状态"><span class="dot" id="stm32Dot"></span><span id="stm32Text">等待数据</span></span>
+        </div>
+
+        <div class="btnRow">
+          <button class="btn" id="btnConnect">连接设置</button>
+          <button class="btn ghost" id="btnTheme">切换主题</button>
+        </div>
       </div>
-      <div class="hint">实时状态将自动更新</div>
-    </section>
-    <!-- 控制页面 -->
-    <section id="page-control" class="page">
-      <h2>手动控制</h2>
-      <div class="controls">
-        <div class="control-item">
-          <h3>雾化</h3>
-          <button class="on" data-act="mist" data-val="1">开启</button>
-          <button class="off" data-act="mist" data-val="0">关闭</button>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <div class="topbar">
+        <div class="titleBlock">
+          <h2>雾境智培 · Web控制台</h2>
+          <p>实时状态与控制面板（适配大屏与移动端）。</p>
         </div>
-        <div class="control-item">
-          <h3>风扇</h3>
-          <button class="on" data-act="fan" data-val="1">开启</button>
-          <button class="off" data-act="fan" data-val="0">关闭</button>
-        </div>
-        <div class="control-item">
-          <h3>加热</h3>
-          <button class="on" data-act="heater" data-val="1">开启</button>
-          <button class="off" data-act="heater" data-val="0">关闭</button>
-        </div>
-        <div class="control-item">
-          <h3>补光</h3>
-          <button class="on" data-act="light" data-val="1">开启</button>
-          <button class="off" data-act="light" data-val="0">关闭</button>
+        <div class="topActions">
+          <div class="search" title="按关键字筛选卡片（例如：温度 / 水位 / EC）">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10.5 3a7.5 7.5 0 1 0 4.7 13.4l4.2 4.2 1.4-1.4-4.2-4.2A7.5 7.5 0 0 0 10.5 3Zm0 2a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11Z" fill="currentColor" opacity=".85"/></svg>
+            <input id="filterInput" placeholder="搜索指标 / 功能" />
+          </div>
+          <button class="btn ghost" id="btnQuickRefresh">刷新</button>
+          <button class="btn" id="btnExport">导出CSV</button>
         </div>
       </div>
-      <div class="hint">点击控制按钮发送指令</div>
-    </section>
-    <!-- 自动化页面 -->
-    <section id="page-automation" class="page">
-      <h2>自动化设置</h2>
-      <form id="automationForm">
-        <div class="form-group">
-          <label>目标温度 (°C)</label>
-          <input type="number" step="0.1" id="targetTemp" placeholder="如 24.0" />
-        </div>
-        <div class="form-group">
-          <label>目标湿度 (%)</label>
-          <input type="number" step="1" id="targetHum" placeholder="如 60" />
-        </div>
-        <div class="form-group">
-          <label>pH 范围</label>
-          <div style="display:flex; gap:8px;">
-            <input type="number" step="0.1" id="phMin" placeholder="最小" />
-            <input type="number" step="0.1" id="phMax" placeholder="最大" />
+
+      <!-- Views -->
+      <section id="view-overview" class="view show">
+        <div class="sectionTitle">
+          <div>
+            <h3>关键指标</h3>
+            <p>状态卡片会随数据更新自动高亮与联动。</p>
+          </div>
+          <div class="tabs" id="kpiModeTabs">
+            <div class="tab active" data-mode="live">实时</div>
+            <div class="tab" data-mode="today">今日趋势</div>
+            <div class="tab" data-mode="health">健康概览</div>
           </div>
         </div>
-        <div class="form-group">
-          <label>EC 范围</label>
-          <div style="display:flex; gap:8px;">
-            <input type="number" step="0.1" id="ecMin" placeholder="最小" />
-            <input type="number" step="0.1" id="ecMax" placeholder="最大" />
+
+        <div class="grid" id="kpiGrid">
+          <!-- Environment KPIs -->
+          <div class="card span-3" data-keywords="温度 温" id="card-temp">
+            <div class="cardHeader"><h3>温度</h3><span class="badge" id="tempBadge">--</span></div>
+            <div class="cardBody">
+              <div class="kpi"><div class="value" id="tempValue">—</div><div class="unit">°C</div></div>
+              <div class="sub"><span>目标</span><span id="tempTarget">—</span></div>
+            </div>
+          </div>
+
+          <div class="card span-3" data-keywords="湿度 湿" id="card-hum">
+            <div class="cardHeader"><h3>湿度</h3><span class="badge" id="humBadge">--</span></div>
+            <div class="cardBody">
+              <div class="kpi"><div class="value" id="humValue">—</div><div class="unit">%RH</div></div>
+              <div class="sub"><span>舒适区</span><span id="humHint">—</span></div>
+            </div>
+          </div>
+
+          <div class="card span-3" data-keywords="光照 Lux 光" id="card-lux">
+            <div class="cardHeader"><h3>光照</h3><span class="badge" id="luxBadge">--</span></div>
+            <div class="cardBody">
+              <div class="kpi"><div class="value" id="luxValue">—</div><div class="unit">Lux</div></div>
+              <div class="sub"><span>光照模式</span><span id="lightModeText">—</span></div>
+            </div>
+          </div>
+
+          <div class="card span-3" data-keywords="EC 电导" id="card-ec">
+            <div class="cardHeader"><h3>EC</h3><span class="badge" id="ecBadge">--</span></div>
+            <div class="cardBody">
+              <div class="kpi"><div class="value" id="ecValue">—</div><div class="unit">mS/cm</div></div>
+              <div class="sub"><span>建议范围</span><span id="ecHint">—</span></div>
+            </div>
+          </div>
+
+          <div class="card span-3" data-keywords="pH 酸碱" id="card-ph">
+            <div class="cardHeader"><h3>pH</h3><span class="badge" id="phBadge">--</span></div>
+            <div class="cardBody">
+              <div class="kpi"><div class="value" id="phValue">—</div><div class="unit">pH</div></div>
+              <div class="sub"><span>建议范围</span><span id="phHint">—</span></div>
+            </div>
+          </div>
+
+          <div class="card span-3" data-keywords="水位 0 1" id="card-wls">
+            <div class="cardHeader"><h3>水位(0/1)</h3><span class="badge" id="wlsBadge">--</span></div>
+            <div class="cardBody">
+              <div class="kpi"><div class="value" id="waterLevelStateValue">—</div><div class="unit">状态</div></div>
+              <div class="sub"><span>水位档位</span><span id="waterLevelValue">—</span></div>
+            </div>
+          </div>
+
+          <div class="card span-3" data-keywords="液位 RSSI 信号" id="card-rssi">
+            <div class="cardHeader"><h3>液位RSSI</h3><span class="badge" id="rssiBadge">--</span></div>
+            <div class="cardBody">
+              <div class="kpi"><div class="value" id="lvRssiValue">—</div><div class="unit">强度</div></div>
+              <div class="sub"><span>更新时间</span><span id="lastUpdateText">—</span></div>
+            </div>
+          </div>
+
+          <div class="card span-3" data-keywords="运行 时间" id="card-runtime">
+            <div class="cardHeader"><h3>运行时间</h3><span class="badge" id="runtimeBadge">--</span></div>
+            <div class="cardBody">
+              <div class="kpi"><div class="value" id="runtimeValue">—</div><div class="unit">小时</div></div>
+              <div class="sub"><span>设备状态</span><span id="healthText">—</span></div>
+            </div>
+          </div>
+
+          <!-- System status summary -->
+          <div class="card span-12" data-keywords="系统 状态 雾化 风扇 加热 补光">
+            <div class="cardHeader">
+              <div>
+                <h3>运行状态</h3>
+                <div class="sub" style="margin-top:6px"><span>快速概览</span><span id="statusLine">—</span></div>
+              </div>
+              <span class="badge" id="commBadge"><strong>通信</strong> <span id="commText">—</span></span>
+            </div>
+            <div class="cardBody">
+              <div class="controlsGrid">
+                <div class="tile">
+                  <div>
+                    <h4>雾化</h4>
+                    <p id="mistDesc">—</p>
+                  </div>
+                  <div class="pill" id="mistValue">—</div>
+                </div>
+                <div class="tile">
+                  <div>
+                    <h4>风扇</h4>
+                    <p id="fanDesc">—</p>
+                  </div>
+                  <div class="pill" id="fanValue">—</div>
+                </div>
+                <div class="tile">
+                  <div>
+                    <h4>加热</h4>
+                    <p id="heaterDesc">—</p>
+                  </div>
+                  <div class="pill" id="heaterValue">—</div>
+                </div>
+                <div class="tile">
+                  <div>
+                    <h4>补光</h4>
+                    <p id="lightDesc">—</p>
+                  </div>
+                  <div class="pill" id="lightPwmValue">—</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="form-group">
-          <label>定时喷雾</label>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <input type="checkbox" id="timedMist" /> 启用
-            <input type="number" step="1" id="mistOn" placeholder="喷雾时间(s)" style="flex:1;" />
-            <input type="number" step="1" id="mistOff" placeholder="间隔(s)" style="flex:1;" />
+      </section>
+
+      <section id="view-control" class="view">
+        <div class="sectionTitle">
+          <div>
+            <h3>设备控制</h3>
+            <p>开关与滑条会发送控制指令到设备。</p>
+          </div>
+          <div class="tabs" id="controlTabs">
+            <div class="tab active" data-ctab="quick">快捷</div>
+            <div class="tab" data-ctab="fine">精细</div>
+            <div class="tab" data-ctab="safety">安全</div>
           </div>
         </div>
-        <button type="button" id="saveAutomation" class="theme-toggle" style="margin-top:10px;">保存设置</button>
-      </form>
-      <div class="hint">自动化规则将在下一版固件实现，此处设置暂存于浏览器</div>
-    </section>
-    <!-- 洞察页面 -->
-    <section id="page-insights" class="page">
-      <h2>数据洞察</h2>
-      <div class="chart-container">
-        <canvas id="insightChart"></canvas>
-      </div>
-      <div class="form-group">
-        <label>选择指标</label>
-        <select id="insightSelect">
-          <option value="temperature">温度</option>
-          <option value="humidity">湿度</option>
-          <option value="ph">pH</option>
-          <option value="ec">EC</option>
-          <option value="lux">光照</option>
-          <option value="waterLevelState">水位</option>
-        </select>
-      </div>
-      <div class="hint">本页将绘制最近 50 条记录的曲线图</div>
-    </section>
-    <!-- 设备页面 -->
-    <section id="page-devices" class="page">
-      <h2>设备与连接</h2>
-      <div class="form-group">
-        <label>Broker 地址</label>
-        <input type="text" id="brokerInput" placeholder="如 wss://broker.emqx.io:8084/mqtt" />
-      </div>
-      <div class="form-group">
-        <label>订阅主题</label>
-        <input type="text" id="subTopicInput" placeholder="如 home/data" />
-      </div>
-      <div class="form-group">
-        <label>发布主题</label>
-        <input type="text" id="pubTopicInput" placeholder="如 home/control" />
-      </div>
-      <button type="button" id="connectBtn" class="theme-toggle">连接</button>
-      <button type="button" id="disconnectBtn" class="theme-toggle" style="display:none;">断开</button>
-      <div class="hint">连接参数会保存到浏览器本地存储</div>
-    </section>
+
+        <div class="grid">
+          <div class="card span-7" data-keywords="控制 开关 风扇 加热 雾化 补光">
+            <div class="cardHeader">
+              <h3>手动控制</h3>
+              <span class="badge"><strong>提示</strong> <span style="color:var(--muted)">部分功能取决于设备固件版本</span></span>
+            </div>
+            <div class="cardBody">
+              <div class="controlsGrid" style="grid-template-columns: 1fr 1fr;">
+                <div class="tile">
+                  <div>
+                    <h4>风扇开关</h4>
+                    <p>提升空气流通与散热</p>
+                  </div>
+                  <div class="switch" id="fanToggle" role="switch" aria-checked="false"></div>
+                </div>
+
+                <div class="tile">
+                  <div>
+                    <h4>加热开关</h4>
+                    <p>稳定环境温度</p>
+                  </div>
+                  <div class="switch" id="heaterToggle" role="switch" aria-checked="false"></div>
+                </div>
+
+                <div class="tile">
+                  <div>
+                    <h4>雾化开关</h4>
+                    <p>开启/停止雾化循环</p>
+                  </div>
+                  <div class="switch" id="mistToggle" role="switch" aria-checked="false"></div>
+                </div>
+
+                <div class="tile">
+                  <div>
+                    <h4>补光开关</h4>
+                    <p>植物照明模式切换</p>
+                  </div>
+                  <div class="switch" id="lightToggle" role="switch" aria-checked="false"></div>
+                </div>
+              </div>
+
+              <div style="height:12px"></div>
+
+              <div class="tile">
+                <div>
+                  <h4>补光强度</h4>
+                  <p>0–100%（用于 PWM/亮度控制）</p>
+                </div>
+                <div style="width: 48%; min-width: 220px">
+                  <div class="sliderRow">
+                    <input id="lightSlider" type="range" min="0" max="100" step="1" value="0" />
+                    <span class="pill" id="lightSliderVal">0%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style="height:12px"></div>
+
+              <div class="tile">
+                <div>
+                  <h4>雾化占空比</h4>
+                  <p>0–100%（用于强度/频率策略）</p>
+                </div>
+                <div style="width: 48%; min-width: 220px">
+                  <div class="sliderRow">
+                    <input id="mistDutySlider" type="range" min="0" max="100" step="1" value="0" />
+                    <span class="pill" id="mistDutyVal">0%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style="height:12px"></div>
+
+              <div class="btnRow" style="justify-content:flex-end">
+                <button class="btn ghost" id="btnAllOff">一键关闭</button>
+                <button class="btn" id="btnApplyControls">发送控制</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card span-5" data-keywords="场景 模式 生长阶段">
+            <div class="cardHeader"><h3>场景一键应用</h3><span class="badge">快速预设</span></div>
+            <div class="cardBody">
+              <div class="controlsGrid" style="grid-template-columns: 1fr;">
+                <div class="tile">
+                  <div>
+                    <h4>育苗</h4>
+                    <p>温和环境 · 更高湿度 · 柔光</p>
+                  </div>
+                  <button class="btn ghost" data-profile="seedling">应用</button>
+                </div>
+                <div class="tile">
+                  <div>
+                    <h4>生长期</h4>
+                    <p>稳定温湿 · 较强补光 · 循环雾化</p>
+                  </div>
+                  <button class="btn ghost" data-profile="veg">应用</button>
+                </div>
+                <div class="tile">
+                  <div>
+                    <h4>展示模式</h4>
+                    <p>数据大屏 · 强化视觉呈现</p>
+                  </div>
+                  <button class="btn ghost" data-profile="showcase">应用</button>
+                </div>
+              </div>
+              <div style="height:12px"></div>
+              <div class="badge" style="display:flex; justify-content:space-between">
+                <span>最近发送</span>
+                <strong id="lastCmdText">—</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="card span-12" data-keywords="提醒 告警 传感器 漏水">
+            <div class="cardHeader"><h3>告警与提醒</h3><span class="badge">自动刷新</span></div>
+            <div class="cardBody">
+              <table class="table" id="alertTable">
+                <thead>
+                  <tr>
+                    <th style="width:140px">时间</th>
+                    <th>事件</th>
+                    <th style="width:120px">级别</th>
+                  </tr>
+                </thead>
+                <tbody id="alertTbody">
+                  <tr><td>—</td><td><strong>暂无事件</strong><div style="margin-top:4px">设备上报后会自动生成关键提醒。</div></td><td>—</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-automation" class="view">
+        <div class="sectionTitle">
+          <div>
+            <h3>自动化策略</h3>
+            <p>用于设置目标、定时与联动规则。</p>
+          </div>
+          <div class="tabs" id="autoTabs">
+            <div class="tab active" data-atab="targets">目标</div>
+            <div class="tab" data-atab="schedule">定时</div>
+            <div class="tab" data-atab="rules">联动</div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="card span-6" data-keywords="目标 温度 湿度">
+            <div class="cardHeader"><h3>目标温湿度</h3><span class="badge">建议：按作物调整</span></div>
+            <div class="cardBody">
+              <div class="controlsGrid" style="grid-template-columns: 1fr;">
+                <div class="tile">
+                  <div>
+                    <h4>目标温度</h4>
+                    <p>设备将尝试接近此目标（若已支持闭环）</p>
+                  </div>
+                  <div class="sliderRow" style="width:48%;min-width:220px">
+                    <input id="targetTemp" type="range" min="10" max="40" step="0.5" value="26" />
+                    <span class="pill" id="targetTempVal">26°C</span>
+                  </div>
+                </div>
+                <div class="tile">
+                  <div>
+                    <h4>目标湿度</h4>
+                    <p>建议范围会随场景变化</p>
+                  </div>
+                  <div class="sliderRow" style="width:48%;min-width:220px">
+                    <input id="targetHum" type="range" min="30" max="95" step="1" value="65" />
+                    <span class="pill" id="targetHumVal">65%</span>
+                  </div>
+                </div>
+              </div>
+              <div style="height:12px"></div>
+              <div class="btnRow" style="justify-content:flex-end">
+                <button class="btn ghost" id="btnResetTargets">重置</button>
+                <button class="btn" id="btnSaveTargets">保存目标</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card span-6" data-keywords="营养液 EC pH">
+            <div class="cardHeader"><h3>营养液建议范围</h3><span class="badge">用于提醒与可视化</span></div>
+            <div class="cardBody">
+              <div class="controlsGrid" style="grid-template-columns: 1fr;">
+                <div class="tile">
+                  <div>
+                    <h4>EC 建议范围</h4>
+                    <p>超出范围时会提示</p>
+                  </div>
+                  <div class="sliderRow" style="width:48%;min-width:240px">
+                    <input id="ecMin" type="range" min="0" max="5" step="0.1" value="0.8" />
+                    <input id="ecMax" type="range" min="0" max="5" step="0.1" value="2.0" />
+                  </div>
+                </div>
+                <div class="tile">
+                  <div>
+                    <h4>pH 建议范围</h4>
+                    <p>适度偏离可提示调节</p>
+                  </div>
+                  <div class="sliderRow" style="width:48%;min-width:240px">
+                    <input id="phMin" type="range" min="4" max="9" step="0.1" value="5.8" />
+                    <input id="phMax" type="range" min="4" max="9" step="0.1" value="6.5" />
+                  </div>
+                </div>
+              </div>
+              <div style="height:12px"></div>
+              <div class="badge" style="display:flex; justify-content:space-between">
+                <span>当前范围</span>
+                <strong id="rangeText">EC 0.8–2.0 / pH 5.8–6.5</strong>
+              </div>
+              <div style="height:12px"></div>
+              <div class="btnRow" style="justify-content:flex-end">
+                <button class="btn ghost" id="btnResetRanges">重置</button>
+                <button class="btn" id="btnSaveRanges">保存范围</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card span-12" data-keywords="定时 补光 雾化">
+            <div class="cardHeader"><h3>定时与计划</h3><span class="badge">24小时制</span></div>
+            <div class="cardBody">
+              <div class="controlsGrid" style="grid-template-columns: 1fr 1fr;">
+                <div class="tile">
+                  <div>
+                    <h4>补光时间窗</h4>
+                    <p>在指定时间段开启补光</p>
+                  </div>
+                  <div style="display:flex; gap:8px; align-items:center">
+                    <span class="pill">开始</span>
+                    <input id="lightStart" type="time" value="08:00" style="background:transparent;border:1px solid var(--border);border-radius:12px;padding:8px;color:var(--text)" />
+                    <span class="pill">结束</span>
+                    <input id="lightEnd" type="time" value="20:00" style="background:transparent;border:1px solid var(--border);border-radius:12px;padding:8px;color:var(--text)" />
+                  </div>
+                </div>
+
+                <div class="tile">
+                  <div>
+                    <h4>雾化循环</h4>
+                    <p>按周期运行（开/关）</p>
+                  </div>
+                  <div style="display:flex; gap:8px; align-items:center">
+                    <input id="mistOn" type="number" value="3" min="0" max="999" style="width:70px;background:transparent;border:1px solid var(--border);border-radius:12px;padding:8px;color:var(--text)" />
+                    <span class="pill">秒开</span>
+                    <input id="mistOff" type="number" value="180" min="0" max="9999" style="width:80px;background:transparent;border:1px solid var(--border);border-radius:12px;padding:8px;color:var(--text)" />
+                    <span class="pill">秒关</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style="height:12px"></div>
+
+              <div class="btnRow" style="justify-content:flex-end">
+                <button class="btn ghost" id="btnResetSchedule">重置</button>
+                <button class="btn" id="btnSaveSchedule">保存计划</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-insights" class="view">
+        <div class="sectionTitle">
+          <div>
+            <h3>数据洞察</h3>
+            <p>趋势图与关键指标对比。</p>
+          </div>
+          <div class="tabs" id="chartTabs">
+            <div class="tab active" data-series="temp">温度</div>
+            <div class="tab" data-series="hum">湿度</div>
+            <div class="tab" data-series="lux">光照</div>
+            <div class="tab" data-series="ec">EC</div>
+            <div class="tab" data-series="ph">pH</div>
+            <div class="tab" data-series="wls">水位(0/1)</div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="card span-8" data-keywords="趋势 图表">
+            <div class="cardHeader">
+              <h3>趋势图</h3>
+              <span class="badge"><strong id="chartName">温度</strong> <span id="chartHint">最近数据</span></span>
+            </div>
+            <div class="cardBody">
+              <canvas id="trendChart" height="130"></canvas>
+            </div>
+          </div>
+
+          <div class="card span-4" data-keywords="统计 最大 最小 平均">
+            <div class="cardHeader"><h3>统计摘要</h3><span class="badge">最近 50 条</span></div>
+            <div class="cardBody">
+              <table class="table">
+                <thead><tr><th>指标</th><th>值</th></tr></thead>
+                <tbody id="statBody">
+                  <tr><td><strong>最大</strong></td><td>—</td></tr>
+                  <tr><td><strong>最小</strong></td><td>—</td></tr>
+                  <tr><td><strong>平均</strong></td><td>—</td></tr>
+                  <tr><td><strong>最新</strong></td><td>—</td></tr>
+                </tbody>
+              </table>
+              <div style="height:12px"></div>
+              <details>
+                <summary>数据详情 <span class="badge">JSON</span></summary>
+                <div class="content">
+                  <pre id="rawPre">{}</pre>
+                </div>
+              </details>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-device" class="view">
+        <div class="sectionTitle">
+          <div>
+            <h3>设备与连接</h3>
+            <p>查看连接状态与基础参数。</p>
+          </div>
+          <div class="tabs" id="deviceTabs">
+            <div class="tab active" data-dtab="status">状态</div>
+            <div class="tab" data-dtab="network">网络</div>
+            <div class="tab" data-dtab="about">关于</div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="card span-6" data-keywords="设备 信息 状态">
+            <div class="cardHeader"><h3>状态概览</h3><span class="badge" id="devBadge">—</span></div>
+            <div class="cardBody">
+              <table class="table">
+                <tbody>
+                  <tr><td><strong>MQTT</strong></td><td id="mqttStatusCell">—</td></tr>
+                  <tr><td><strong>deviceId</strong></td><td id="deviceIdCell">—</td></tr>
+                  <tr><td><strong>STM32</strong></td><td id="stm32Cell">—</td></tr>
+                  <tr><td><strong>上次更新</strong></td><td id="updatedCell">—</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card span-6" data-keywords="主题 设置 连接">
+            <div class="cardHeader"><h3>快速设置</h3><span class="badge">本地保存</span></div>
+            <div class="cardBody">
+              <div class="controlsGrid" style="grid-template-columns: 1fr;">
+                <div class="tile">
+                  <div>
+                    <h4>连接设置</h4>
+                    <p>Broker / Topic / ClientId</p>
+                  </div>
+                  <button class="btn ghost" id="btnOpenSettings">打开</button>
+                </div>
+                <div class="tile">
+                  <div>
+                    <h4>主题外观</h4>
+                    <p>深色 / 浅色</p>
+                  </div>
+                  <button class="btn ghost" id="btnOpenTheme">切换</button>
+                </div>
+                <div class="tile">
+                  <div>
+                    <h4>清空本地缓存</h4>
+                    <p>清除已保存的配置与历史</p>
+                  </div>
+                  <button class="btn ghost" id="btnClearCache">清空</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card span-12" data-keywords="帮助 使用">
+            <div class="cardHeader"><h3>使用说明</h3><span class="badge">无需后端</span></div>
+            <div class="cardBody">
+              <div style="color:var(--muted); font-size:13px; line-height:1.55">
+                这个页面是静态网页，可直接打开使用。默认连接到公开 MQTT Broker，你也可以在“连接设置”中切换到自己的服务器。
+                <br/><br/>
+                如果设备已上报数据，关键指标会自动展示；如果尚未上报，页面会显示占位符并保持界面完整。
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
   </div>
+
+  <!-- Connection / Settings Modal -->
+  <div class="modalMask" id="settingsMask" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="连接设置">
+      <div class="modalHeader">
+        <h3>连接设置</h3>
+        <button class="iconBtn" id="btnCloseSettings" title="关闭">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modalBody">
+        <div class="form">
+          <div class="field">
+            <label>Broker (WebSocket)</label>
+            <input id="cfgBroker" placeholder="wss://broker.emqx.io:8084/mqtt" />
+          </div>
+          <div class="field">
+            <label>ClientId</label>
+            <input id="cfgClientId" placeholder="aero-web-xxxx" />
+          </div>
+          <div class="field">
+            <label>订阅 Topic</label>
+            <input id="cfgSub" placeholder="home/data" />
+          </div>
+          <div class="field">
+            <label>发布 Topic</label>
+            <input id="cfgPub" placeholder="home/control" />
+          </div>
+          <div class="field" style="grid-column: 1 / -1">
+            <label>设备筛选（可选）</label>
+            <select id="cfgDeviceFilter">
+              <option value="">不过滤（显示全部）</option>
+            </select>
+          </div>
+        </div>
+        <div style="height:12px"></div>
+        <div class="badge" style="display:flex; justify-content:space-between">
+          <span>当前状态</span>
+          <strong id="cfgStatus">—</strong>
+        </div>
+      </div>
+      <div class="modalFooter">
+        <button class="btn ghost" id="btnDisconnect">断开</button>
+        <button class="btn ghost" id="btnResetCfg">恢复默认</button>
+        <button class="btn" id="btnSaveCfg">保存并连接</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toastHost" id="toastHost"></div>
+
   <script>
-    // 简易状态存储
-    const state = {
-      connected: false,
-      stm32Online: false,
-      metrics: {},
-      history: [],
-      client: null,
-      broker: localStorage.getItem('aero-broker') || 'wss://broker.emqx.io:8084/mqtt',
-      subTopic: localStorage.getItem('aero-sub') || 'home/data',
-      pubTopic: localStorage.getItem('aero-pub') || 'home/control'
+    /* ----------------------
+       Utilities
+    -----------------------*/
+    function $(id){return document.getElementById(id)}
+
+    function clamp(n, min, max){
+      if(n === null || n === undefined || Number.isNaN(n)) return null;
+      return Math.min(max, Math.max(min, n));
+    }
+
+    function num(v){
+      if(v === null || v === undefined) return null;
+      if(typeof v === 'number') return Number.isFinite(v) ? v : null;
+      const s = String(v).trim();
+      if(!s) return null;
+      const n = Number(s);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function bool(v){
+      if(v === null || v === undefined) return null;
+      if(typeof v === 'boolean') return v;
+      if(typeof v === 'number') return v !== 0;
+      const s = String(v).toLowerCase();
+      if(['1','true','on','yes'].includes(s)) return true;
+      if(['0','false','off','no'].includes(s)) return false;
+      return null;
+    }
+
+    function fmt(n, digits=1){
+      if(n === null || n === undefined) return '—';
+      if(!Number.isFinite(n)) return '—';
+      return n.toFixed(digits);
+    }
+
+    function fmtInt(n){
+      if(n === null || n === undefined) return '—';
+      const x = Number(n);
+      if(!Number.isFinite(x)) return '—';
+      return String(Math.round(x));
+    }
+
+    function nowStr(){
+      const d = new Date();
+      const p = (x)=> String(x).padStart(2,'0');
+      return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    }
+
+    function toast(title, msg, level='info'){
+      const host = $('toastHost');
+      const el = document.createElement('div');
+      el.className = 'toast';
+      const dotClass = level === 'ok' ? 'ok' : (level === 'warn' ? 'warn' : (level === 'bad' ? 'bad' : ''));
+      el.innerHTML = `
+        <span class="dot ${dotClass}" style="margin-top:6px"></span>
+        <div style="min-width:0">
+          <div class="tTitle">${escapeHtml(title)}</div>
+          <div class="tMsg">${escapeHtml(msg)}</div>
+        </div>
+        <button class="x" title="关闭">✕</button>
+      `;
+      el.querySelector('.x').onclick = ()=> el.remove();
+      host.appendChild(el);
+      setTimeout(()=>{ if(el.isConnected) el.remove(); }, 5200);
+    }
+
+    function escapeHtml(s){
+      return String(s)
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'",'&#39;');
+    }
+
+    function safeJsonParse(str){
+      try{ return JSON.parse(str); }catch(e){ return null; }
+    }
+
+    function downloadText(filename, text){
+      const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 0);
+    }
+
+    /* ----------------------
+       State & Config
+    -----------------------*/
+    const DEFAULT_CFG = {
+      broker: 'wss://broker.emqx.io:8084/mqtt',
+      subTopic: 'home/data',
+      pubTopic: 'home/control',
+      clientId: 'aero-web-' + Math.random().toString(16).slice(2, 10),
+      deviceFilter: ''
     };
 
-    // 页面切换
-    document.querySelectorAll('.sidebar li').forEach(li => {
-      li.addEventListener('click', () => {
-        const page = li.getAttribute('data-page');
-        // 设置左侧导航高亮
-        document.querySelectorAll('.sidebar li').forEach(item => item.classList.remove('active'));
-        li.classList.add('active');
-        // 切换页面
-        document.querySelectorAll('.page').forEach(section => section.classList.remove('active'));
-        document.getElementById('page-' + page).classList.add('active');
-        // 更新标题
-        document.getElementById('pageTitle').innerText = li.innerText;
-      });
-    });
+    const cfg = loadCfg();
 
-    // 主题切换
-    const themeBtn = document.getElementById('themeToggle');
-    themeBtn.addEventListener('click', () => {
-      document.body.classList.toggle('dark');
-      if (document.body.classList.contains('dark')) {
-        themeBtn.innerText = '浅色模式';
-      } else {
-        themeBtn.innerText = '暗黑模式';
+    function loadCfg(){
+      try{
+        const j = JSON.parse(localStorage.getItem('aero_web_cfg') || 'null');
+        return {...DEFAULT_CFG, ...(j||{})};
+      }catch(e){
+        return {...DEFAULT_CFG};
       }
-    });
+    }
 
-    // MQTT 连接和订阅
-    function connectMQTT() {
-      if (state.client) {
-        state.client.end();
+    function saveCfg(){
+      localStorage.setItem('aero_web_cfg', JSON.stringify(cfg));
+    }
+
+    const appState = {
+      connected: false,
+      deviceId: '',
+      lastUpdateTs: 0,
+      stm32Online: null,
+      rxOk: null,
+      crcErr: null,
+      ageMs: null,
+
+      // env
+      temp: null,
+      hum: null,
+      lux: null,
+      ec: null,
+      ph: null,
+      waterVolume: null,
+      runtime: null,
+
+      // water
+      waterLevel: null,
+      waterLevelState: null,
+      lvRssi: null,
+
+      // system
+      mist: null,
+      mistOnSec: null,
+      mistOffSec: null,
+      fan: null,
+      fanSpeed: null,
+      heater: null,
+      light: null,
+      lightPWM: null,
+      sensorState: null,
+      leak: null,
+
+      raw: {},
+      rawText: '{}'
+    };
+
+    // local preferences
+    const pref = {
+      theme: localStorage.getItem('aero_web_theme') || 'dark',
+      ranges: loadRanges(),
+      targets: loadTargets(),
+      schedule: loadSchedule(),
+      history: loadHistory()
+    };
+
+    function loadRanges(){
+      try{ return JSON.parse(localStorage.getItem('aero_web_ranges')||'null') || {ecMin:0.8, ecMax:2.0, phMin:5.8, phMax:6.5}; }catch(e){
+        return {ecMin:0.8, ecMax:2.0, phMin:5.8, phMax:6.5};
       }
-      const clientId = 'web_' + Math.random().toString(16).substr(2, 8);
-      const connectUrl = state.broker;
-      state.client = mqtt.connect(connectUrl, {
-        clientId: clientId,
+    }
+    function saveRanges(){ localStorage.setItem('aero_web_ranges', JSON.stringify(pref.ranges)); }
+
+    function loadTargets(){
+      try{ return JSON.parse(localStorage.getItem('aero_web_targets')||'null') || {temp:26, hum:65}; }catch(e){
+        return {temp:26, hum:65};
+      }
+    }
+    function saveTargets(){ localStorage.setItem('aero_web_targets', JSON.stringify(pref.targets)); }
+
+    function loadSchedule(){
+      try{ return JSON.parse(localStorage.getItem('aero_web_schedule')||'null') || {lightStart:'08:00', lightEnd:'20:00', mistOn:3, mistOff:180}; }catch(e){
+        return {lightStart:'08:00', lightEnd:'20:00', mistOn:3, mistOff:180};
+      }
+    }
+    function saveSchedule(){ localStorage.setItem('aero_web_schedule', JSON.stringify(pref.schedule)); }
+
+    function loadHistory(){
+      try{ return JSON.parse(localStorage.getItem('aero_web_history')||'[]') || []; }catch(e){ return []; }
+    }
+
+    function saveHistory(){
+      // keep last 300
+      if(pref.history.length > 300) pref.history = pref.history.slice(-300);
+      localStorage.setItem('aero_web_history', JSON.stringify(pref.history));
+    }
+
+    function setTheme(theme){
+      pref.theme = theme;
+      document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
+      localStorage.setItem('aero_web_theme', pref.theme);
+    }
+
+    setTheme(pref.theme);
+
+    /* ----------------------
+       MQTT
+    -----------------------*/
+    let client = null;
+
+    function connect(){
+      if(typeof mqtt === 'undefined'){
+        toast('连接失败', '未加载 mqtt.js，请检查网络。', 'bad');
+        return;
+      }
+
+      if(client){
+        try{ client.end(true); }catch(e){}
+        client = null;
+      }
+
+      $('cfgStatus').textContent = '连接中…';
+      updateMqttChip(false, '连接中');
+
+      client = mqtt.connect(cfg.broker, {
+        clientId: cfg.clientId,
+        keepalive: 45,
         clean: true,
-        connectTimeout: 4000,
-        reconnectPeriod: 4000
+        reconnectPeriod: 1500,
+        connectTimeout: 9000
       });
-      state.client.on('connect', () => {
-        state.connected = true;
-        updateConnectionStatus();
-        state.client.subscribe(state.subTopic, err => {
-          if (err) console.error(err);
+
+      client.on('connect', ()=>{
+        appState.connected = true;
+        updateMqttChip(true, '已连接');
+        $('cfgStatus').textContent = '已连接';
+        toast('已连接', 'MQTT 连接成功', 'ok');
+        client.subscribe(cfg.subTopic, {qos:0}, (err)=>{
+          if(err){
+            toast('订阅失败', String(err.message || err), 'bad');
+          }else{
+            toast('订阅成功', `Topic: ${cfg.subTopic}`, 'ok');
+          }
         });
       });
-      state.client.on('reconnect', () => {
-        state.connected = false;
-        updateConnectionStatus();
+
+      client.on('reconnect', ()=>{
+        appState.connected = false;
+        updateMqttChip(false, '重连中');
+        $('cfgStatus').textContent = '重连中…';
       });
-      state.client.on('close', () => {
-        state.connected = false;
-        updateConnectionStatus();
+
+      client.on('close', ()=>{
+        appState.connected = false;
+        updateMqttChip(false, '已断开');
+        $('cfgStatus').textContent = '已断开';
       });
-      state.client.on('message', (topic, message) => {
-        try {
-          const data = JSON.parse(message.toString());
-          handleData(data);
-        } catch (e) {
-          console.warn('Invalid JSON', e);
-        }
+
+      client.on('error', (err)=>{
+        updateMqttChip(false, '错误');
+        $('cfgStatus').textContent = '错误';
+        toast('连接错误', String(err.message || err), 'bad');
+      });
+
+      client.on('message', (topic, payload)=>{
+        const text = payload.toString();
+        handleIncoming(topic, text);
       });
     }
 
-    function disconnectMQTT() {
-      if (state.client) {
-        state.client.end();
-        state.client = null;
+    function disconnect(){
+      if(client){
+        try{ client.end(true); }catch(e){}
+        client = null;
       }
-      state.connected = false;
-      updateConnectionStatus();
+      appState.connected = false;
+      updateMqttChip(false, '未连接');
+      $('cfgStatus').textContent = '未连接';
+      toast('已断开', 'MQTT 已断开连接', 'warn');
     }
 
-    // 更新连接状态显示
-    function updateConnectionStatus() {
-      const connEl = document.getElementById('connStatus');
-      const stm32El = document.getElementById('stm32Status');
-      const diagEl = document.getElementById('diagStatus');
-      if (state.connected) {
-        connEl.innerText = '已连接';
-        connEl.className = 'badge ok';
-      } else {
-        connEl.innerText = '未连接';
-        connEl.className = 'badge warn';
+    function publish(obj){
+      if(!client || !appState.connected){
+        toast('发送失败', '当前未连接，请先连接 MQTT。', 'bad');
+        return;
       }
-      // STM32 状态
-      if (state.metrics.stm32Online) {
-        stm32El.innerText = 'STM32 在线';
-        stm32El.className = 'badge ok';
-      } else {
-        stm32El.innerText = 'STM32 离线';
-        stm32El.className = 'badge warn';
-      }
-      // 诊断信息
-      const rxOk = state.metrics.rxOk || 0;
-      const crcErr = state.metrics.crcErr || 0;
-      diagEl.innerText = 'rxOk: ' + rxOk + ' / crcErr: ' + crcErr;
+      const payload = JSON.stringify({
+        ...obj,
+        ts: Date.now(),
+        source: 'web'
+      });
+      client.publish(cfg.pubTopic, payload, {qos:0, retain:false});
+      $('lastCmdText').textContent = nowStr();
     }
 
-    // 处理收到的数据
-    function handleData(data) {
-      // 数据可以是物模型标准名或自定义名
-      // 把相关字段映射到统一键
-      const mapped = {};
-      mapped.temperature = data.temperature || data.temp || data.Temp || data.T;
-      mapped.humidity = data.humidity || data.hum || data.H;
-      mapped.ph = data.ph || data.pH;
-      mapped.ec = data.ec || data.EC;
-      mapped.lux = data.lux || data.light || data.LightIntensity;
-      mapped.waterLevelState = data.waterLevelState || data.waterLevel || data.lv_present || data.lvP;
-      mapped.lvRssi = data.lvRssi || data.rssi || data.lv_rssi;
-      mapped.stm32Online = data.stm32Online || data.online || false;
-      mapped.rxOk = data.rxOk || data.rx || 0;
-      mapped.crcErr = data.crcErr || data.crc || 0;
-      // 更新状态存储
-      Object.assign(state.metrics, mapped);
-      // 推入历史
-      const now = Date.now();
-      state.history.push({ t: now, ...mapped });
-      if (state.history.length > 50) state.history.shift();
-      // 更新仪表板
-      updateStats();
-      updateConnectionStatus();
+    /* ----------------------
+       Parsing & Mapping
+    -----------------------*/
+    function handleIncoming(topic, text){
+      const obj = safeJsonParse(text);
+      if(!obj){
+        // keep last raw
+        appState.rawText = text;
+        $('rawPre').textContent = text;
+        return;
+      }
+
+      // normalize payload
+      const data = obj.data || obj.payload || obj;
+      const deviceId = data.deviceId || data.devid || data.clientId || data.device || '';
+      if(deviceId){
+        if(!appState.deviceId) appState.deviceId = String(deviceId);
+        // update device filter options
+        addDeviceOption(String(deviceId));
+      }
+
+      // device filter
+      if(cfg.deviceFilter && deviceId && String(deviceId) !== String(cfg.deviceFilter)){
+        return;
+      }
+
+      appState.raw = data;
+      appState.rawText = JSON.stringify(data, null, 2);
+      $('rawPre').textContent = appState.rawText;
+
+      // map values (support multiple key styles)
+      // env
+      appState.temp = num(data.temp ?? data.temperature ?? data.EnvTemperature);
+      appState.hum  = num(data.hum  ?? data.humidity    ?? data.EnvHumidity);
+      appState.lux  = num(data.lux  ?? data.light       ?? data.LightIntensity);
+      appState.ec   = num(data.ec   ?? data.EC);
+      appState.ph   = num(data.ph   ?? data.PH ?? data.pH);
+      appState.waterVolume = num(data.waterVolume ?? data.CurrentWaterVolume);
+      appState.runtime = num(data.runtime ?? data.uptime_h ?? data.UptimeHours ?? data.RuntimeHours);
+
+      // water
+      appState.waterLevel = num(data.waterLevel ?? data.WaterLevel);
+      appState.waterLevelState = num(data.waterLevelState ?? data.WaterLevelState);
+      appState.lvRssi = num(data.lvRssi ?? data.LvRssi ?? data.rssi);
+
+      // comm
+      appState.stm32Online = bool(data.stm32Online ?? data.stm32_online ?? data.online);
+      appState.rxOk = num(data.rxOk);
+      appState.crcErr = num(data.crcErr);
+      appState.ageMs = num(data.ageMs);
+
+      // system
+      appState.mist = bool(data.mistEnable ?? data.mist);
+      appState.mistOnSec  = num(data.mistOnSec ?? data.mist_on ?? data.mistOn);
+      appState.mistOffSec = num(data.mistOffSec ?? data.mist_off ?? data.mistOff);
+      appState.fan = bool(data.fan);
+      appState.fanSpeed = num(data.fanSpeed ?? data.fanPwm);
+      appState.heater = bool(data.heater);
+      appState.light = bool(data.light);
+      appState.lightPWM = num(data.lightPWM ?? data.lightPwm);
+      appState.sensorState = bool(data.sensorState);
+      appState.leak = bool(data.leak);
+
+      appState.lastUpdateTs = Date.now();
+
+      // update UI
+      updateAll();
+
+      // push history
+      pushHistory();
+
+      // alerts (simple)
+      maybeAlert();
+    }
+
+    function pushHistory(){
+      const point = {
+        t: Date.now(),
+        temp: appState.temp,
+        hum: appState.hum,
+        lux: appState.lux,
+        ec: appState.ec,
+        ph: appState.ph,
+        wls: appState.waterLevelState,
+      };
+      pref.history.push(point);
+      saveHistory();
       updateChart();
     }
 
-    function updateStats() {
-      document.getElementById('tempValue').innerText = state.metrics.temperature !== undefined ? state.metrics.temperature : '--';
-      document.getElementById('humValue').innerText = state.metrics.humidity !== undefined ? state.metrics.humidity : '--';
-      document.getElementById('phValue').innerText = state.metrics.ph !== undefined ? state.metrics.ph : '--';
-      document.getElementById('ecValue').innerText = state.metrics.ec !== undefined ? state.metrics.ec : '--';
-      document.getElementById('luxValue').innerText = state.metrics.lux !== undefined ? state.metrics.lux : '--';
-      document.getElementById('waterValue').innerText = state.metrics.waterLevelState !== undefined ? state.metrics.waterLevelState : '--';
-      document.getElementById('rssiValue').innerText = state.metrics.lvRssi !== undefined ? state.metrics.lvRssi : '--';
+    /* ----------------------
+       UI Update
+    -----------------------*/
+    function updateMqttChip(ok, text){
+      const dot = $('mqttDot');
+      dot.className = 'dot ' + (ok ? 'ok' : 'bad');
+      $('mqttText').textContent = text;
+      $('mqttStatusCell').textContent = ok ? '已连接' : text;
     }
 
-    // 控制按钮发送
-    document.querySelectorAll('.control-item button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const act = btn.getAttribute('data-act');
-        const val = btn.getAttribute('data-val');
-        if (state.client && state.connected) {
-          const msg = JSON.stringify({
-            action: act,
-            value: Number(val)
-          });
-          state.client.publish(state.pubTopic, msg);
-          // 弹出反馈
-          alert('指令已发送: ' + act + ' -> ' + val);
-        } else {
-          alert('MQTT 未连接');
+    function updateStm32Chip(){
+      // derive online
+      let online = appState.stm32Online;
+      if(online === null){
+        // if ageMs present
+        if(appState.ageMs !== null){
+          online = appState.ageMs < 3000;
         }
-      });
-    });
+      }
+      const dot = $('stm32Dot');
+      const txt = $('stm32Text');
 
-    // 自动化设置保存
-    document.getElementById('saveAutomation').addEventListener('click', () => {
-      const settings = {
-        targetTemp: parseFloat(document.getElementById('targetTemp').value),
-        targetHum: parseFloat(document.getElementById('targetHum').value),
-        phMin: parseFloat(document.getElementById('phMin').value),
-        phMax: parseFloat(document.getElementById('phMax').value),
-        ecMin: parseFloat(document.getElementById('ecMin').value),
-        ecMax: parseFloat(document.getElementById('ecMax').value),
-        timedMist: document.getElementById('timedMist').checked,
-        mistOn: parseInt(document.getElementById('mistOn').value),
-        mistOff: parseInt(document.getElementById('mistOff').value)
+      if(online === null){
+        dot.className = 'dot warn';
+        txt.textContent = '等待数据';
+        $('stm32Cell').textContent = '—';
+        return;
+      }
+
+      if(online){
+        dot.className = 'dot ok';
+        txt.textContent = 'STM32 在线';
+        $('stm32Cell').textContent = '在线';
+      }else{
+        dot.className = 'dot bad';
+        txt.textContent = 'STM32 离线';
+        $('stm32Cell').textContent = '离线';
+      }
+    }
+
+    function setText(id, value){ $(id).textContent = value; }
+
+    function setSwitch(el, on){
+      if(on){
+        el.classList.add('on');
+        el.setAttribute('aria-checked', 'true');
+      }else{
+        el.classList.remove('on');
+        el.setAttribute('aria-checked', 'false');
+      }
+    }
+
+    function updateBadges(){
+      // temp
+      const t = appState.temp;
+      const h = appState.hum;
+      $('tempBadge').textContent = t === null ? '--' : (t < 18 ? '偏冷' : (t > 32 ? '偏热' : '舒适'));
+      $('humBadge').textContent  = h === null ? '--' : (h < 40 ? '偏干' : (h > 85 ? '偏湿' : '适宜'));
+
+      const lux = appState.lux;
+      $('luxBadge').textContent = lux === null ? '--' : (lux < 800 ? '较暗' : (lux > 50000 ? '很亮' : '正常'));
+
+      const ec = appState.ec;
+      const ph = appState.ph;
+      const r = pref.ranges;
+      $('ecBadge').textContent = ec === null ? '--' : (ec < r.ecMin ? '偏低' : (ec > r.ecMax ? '偏高' : '正常'));
+      $('phBadge').textContent = ph === null ? '--' : (ph < r.phMin ? '偏低' : (ph > r.phMax ? '偏高' : '正常'));
+
+      const wls = appState.waterLevelState;
+      $('wlsBadge').textContent = wls === null ? '--' : (wls === 1 ? '有水' : '缺水');
+
+      const rssi = appState.lvRssi;
+      $('rssiBadge').textContent = rssi === null ? '--' : (rssi > 7000 ? '强' : (rssi > 3000 ? '中' : '弱'));
+
+      const rt = appState.runtime;
+      $('runtimeBadge').textContent = rt === null ? '--' : '运行中';
+
+      // comm badge
+      const ok = (appState.rxOk !== null || appState.crcErr !== null)
+        ? `${fmtInt(appState.rxOk)} / ${fmtInt(appState.crcErr)}`
+        : '—';
+      $('commText').textContent = ok;
+      $('commBadge').style.borderColor = appState.crcErr && appState.crcErr > 0 ? 'rgba(251,113,133,.35)' : '';
+
+      // hints
+      $('ecHint').textContent = `EC ${r.ecMin.toFixed(1)}–${r.ecMax.toFixed(1)}`;
+      $('phHint').textContent = `pH ${r.phMin.toFixed(1)}–${r.phMax.toFixed(1)}`;
+      $('humHint').textContent = '40–85%';
+    }
+
+    function updateSystemLine(){
+      const parts = [];
+      if(appState.mist !== null) parts.push(`雾化 ${appState.mist ? '开启' : '关闭'}`);
+      if(appState.fan !== null) parts.push(`风扇 ${appState.fan ? '开启' : '关闭'}`);
+      if(appState.heater !== null) parts.push(`加热 ${appState.heater ? '开启' : '关闭'}`);
+      if(appState.lightPWM !== null) parts.push(`补光 ${fmtInt(appState.lightPWM)}%`);
+      $('statusLine').textContent = parts.length ? parts.join(' · ') : '—';
+
+      // tiles
+      $('mistValue').textContent = appState.mist === null ? '—' : (appState.mist ? '开启' : '关闭');
+      $('fanValue').textContent = appState.fanSpeed !== null ? `${fmtInt(appState.fanSpeed)}%` : (appState.fan === null ? '—' : (appState.fan ? '开启' : '关闭'));
+      $('heaterValue').textContent = appState.heater === null ? '—' : (appState.heater ? '开启' : '关闭');
+      $('lightPwmValue').textContent = appState.lightPWM === null ? '—' : `${fmtInt(appState.lightPWM)}%`;
+
+      $('mistDesc').textContent = (appState.mistOnSec !== null && appState.mistOffSec !== null)
+        ? `循环 ${fmtInt(appState.mistOnSec)}s / ${fmtInt(appState.mistOffSec)}s`
+        : '按设备策略运行';
+      $('fanDesc').textContent = '用于通风与散热';
+      $('heaterDesc').textContent = '用于升温与保温';
+      $('lightDesc').textContent = '用于植物照明';
+
+      // light mode
+      $('lightModeText').textContent = appState.lightPWM === null ? '—' : (appState.lightPWM === 0 ? '关闭' : (appState.lightPWM < 40 ? '柔光' : '增强'));
+    }
+
+    function updateDeviceCells(){
+      $('deviceIdText').textContent = appState.deviceId || '-';
+      $('deviceIdCell').textContent = appState.deviceId || '—';
+      $('updatedCell').textContent = appState.lastUpdateTs ? new Date(appState.lastUpdateTs).toLocaleString() : '—';
+      $('lastUpdateText').textContent = appState.lastUpdateTs ? new Date(appState.lastUpdateTs).toLocaleTimeString() : '—';
+
+      // dev badge
+      const b = $('devBadge');
+      if(appState.deviceId){
+        b.textContent = '已识别设备';
+      }else{
+        b.textContent = '等待设备数据';
+      }
+
+      // health
+      const ok = (appState.leak === true) ? false : true;
+      $('healthText').textContent = ok ? '正常' : '注意';
+    }
+
+    function updateKpis(){
+      $('tempValue').textContent = fmt(appState.temp, 1);
+      $('humValue').textContent  = fmtInt(appState.hum);
+      $('luxValue').textContent  = fmtInt(appState.lux);
+      $('ecValue').textContent   = fmt(appState.ec, 2);
+      $('phValue').textContent   = fmt(appState.ph, 2);
+
+      $('waterLevelStateValue').textContent = appState.waterLevelState === null ? '—' : fmtInt(appState.waterLevelState);
+      $('waterLevelValue').textContent      = appState.waterLevel === null ? '—' : fmtInt(appState.waterLevel);
+      $('lvRssiValue').textContent          = fmtInt(appState.lvRssi);
+      $('runtimeValue').textContent         = appState.runtime === null ? '—' : fmt(appState.runtime, 0);
+
+      $('tempTarget').textContent = `${pref.targets.temp}°C / ${pref.targets.hum}%`;
+    }
+
+    function updateAll(){
+      updateDeviceCells();
+      updateStm32Chip();
+      updateBadges();
+      updateKpis();
+      updateSystemLine();
+
+      // update controls current values
+      if(appState.fan !== null) setSwitch($('fanToggle'), !!appState.fan);
+      if(appState.heater !== null) setSwitch($('heaterToggle'), !!appState.heater);
+      if(appState.mist !== null) setSwitch($('mistToggle'), !!appState.mist);
+      if(appState.light !== null) setSwitch($('lightToggle'), !!appState.light);
+
+      if(appState.lightPWM !== null){
+        $('lightSlider').value = clamp(appState.lightPWM, 0, 100) ?? 0;
+        $('lightSliderVal').textContent = `${fmtInt($('lightSlider').value)}%`;
+      }
+      if(appState.mistOnSec !== null && appState.mistOffSec !== null){
+        // convert to rough percent if available
+      }
+
+      // comm text in device
+      const comm = (appState.rxOk !== null || appState.crcErr !== null)
+        ? `OK ${fmtInt(appState.rxOk)} / Err ${fmtInt(appState.crcErr)}`
+        : '—';
+      $('commText').textContent = comm;
+
+      // raw
+      $('rawPre').textContent = appState.rawText || '{}';
+    }
+
+    /* ----------------------
+       Alerts
+    -----------------------*/
+    const alertBuf = [];
+    function addAlert(event, level){
+      alertBuf.unshift({time: new Date().toLocaleString(), event, level});
+      if(alertBuf.length > 12) alertBuf.length = 12;
+      renderAlerts();
+    }
+
+    function renderAlerts(){
+      const tb = $('alertTbody');
+      tb.innerHTML = '';
+      if(alertBuf.length === 0){
+        tb.innerHTML = `<tr><td>—</td><td><strong>暂无事件</strong><div style="margin-top:4px">设备上报后会自动生成关键提醒。</div></td><td>—</td></tr>`;
+        return;
+      }
+      for(const a of alertBuf){
+        const levelText = a.level === 'bad' ? '紧急' : (a.level === 'warn' ? '提醒' : '信息');
+        const levelDot = a.level === 'bad' ? 'bad' : (a.level === 'warn' ? 'warn' : 'ok');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(a.time)}</td>
+          <td><strong>${escapeHtml(a.event)}</strong></td>
+          <td><span class="chip"><span class="dot ${levelDot}"></span>${levelText}</span></td>
+        `;
+        tb.appendChild(tr);
+      }
+    }
+
+    function maybeAlert(){
+      // leak
+      if(appState.leak === true){
+        addAlert('检测到漏水信号，请检查水路与接头。', 'bad');
+        toast('漏水提醒', '检测到漏水信号，请检查水路。', 'bad');
+      }
+
+      // water
+      if(appState.waterLevelState === 0){
+        addAlert('水位偏低（0），建议补水。', 'warn');
+      }
+
+      // EC/pH
+      const r = pref.ranges;
+      if(appState.ec !== null && (appState.ec < r.ecMin || appState.ec > r.ecMax)){
+        addAlert(`EC 超出范围：${fmt(appState.ec,2)}（建议 ${r.ecMin.toFixed(1)}–${r.ecMax.toFixed(1)}）`, 'warn');
+      }
+      if(appState.ph !== null && (appState.ph < r.phMin || appState.ph > r.phMax)){
+        addAlert(`pH 超出范围：${fmt(appState.ph,2)}（建议 ${r.phMin.toFixed(1)}–${r.phMax.toFixed(1)}）`, 'warn');
+      }
+    }
+
+    /* ----------------------
+       Chart
+    -----------------------*/
+    let trend = null;
+    let currentSeries = 'temp';
+
+    function seriesMeta(key){
+      const map = {
+        temp:{name:'温度', unit:'°C', digits:1},
+        hum:{name:'湿度', unit:'%RH', digits:0},
+        lux:{name:'光照', unit:'Lux', digits:0},
+        ec:{name:'EC', unit:'mS/cm', digits:2},
+        ph:{name:'pH', unit:'pH', digits:2},
+        wls:{name:'水位(0/1)', unit:'状态', digits:0},
       };
-      localStorage.setItem('aero-automation', JSON.stringify(settings));
-      alert('自动化设置已保存');
-    });
-
-    // 连接按钮逻辑
-    function updateConnectButtons() {
-      document.getElementById('connectBtn').style.display = state.connected ? 'none' : 'inline-block';
-      document.getElementById('disconnectBtn').style.display = state.connected ? 'inline-block' : 'none';
+      return map[key] || map.temp;
     }
-    document.getElementById('connectBtn').addEventListener('click', () => {
-      // 读取输入框
-      state.broker = document.getElementById('brokerInput').value.trim() || state.broker;
-      state.subTopic = document.getElementById('subTopicInput').value.trim() || state.subTopic;
-      state.pubTopic = document.getElementById('pubTopicInput').value.trim() || state.pubTopic;
-      // 保存
-      localStorage.setItem('aero-broker', state.broker);
-      localStorage.setItem('aero-sub', state.subTopic);
-      localStorage.setItem('aero-pub', state.pubTopic);
-      connectMQTT();
-      updateConnectButtons();
-    });
-    document.getElementById('disconnectBtn').addEventListener('click', () => {
-      disconnectMQTT();
-      updateConnectButtons();
-    });
 
-    // 初始化输入框
-    document.getElementById('brokerInput').value = state.broker;
-    document.getElementById('subTopicInput').value = state.subTopic;
-    document.getElementById('pubTopicInput').value = state.pubTopic;
-    updateConnectButtons();
-
-    // 数据洞察图表
-    const ctx = document.getElementById('insightChart');
-    const chart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label: '温度',
-          data: [],
-          borderColor: getComputedStyle(document.documentElement).getPropertyValue('--color-primary'),
-          fill: false
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: {
-            display: true,
-            title: { display: false }
+    function buildChart(){
+      const ctx = $('trendChart').getContext('2d');
+      trend = new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: '', data: [], tension: .28, borderWidth: 2, pointRadius: 0 }] },
+        options: {
+          responsive: true,
+          animation: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { intersect: false, mode: 'index' }
           },
-          y: {
-            display: true,
-            title: { display: false }
+          scales: {
+            x: { ticks: { maxTicksLimit: 6 }, grid: { color: 'rgba(255,255,255,.06)' } },
+            y: { grid: { color: 'rgba(255,255,255,.06)' } }
           }
-        },
-        plugins: {
-          legend: { display: false }
         }
-      }
-    });
-    // 更新洞察图
-    function updateChart() {
-      const field = document.getElementById('insightSelect').value;
-      const labels = state.history.map(item => {
-        const date = new Date(item.t);
-        return date.toLocaleTimeString();
       });
-      const values = state.history.map(item => item[field]);
-      chart.data.labels = labels;
-      chart.data.datasets[0].label = field;
-      chart.data.datasets[0].data = values;
-      chart.update();
     }
-    document.getElementById('insightSelect').addEventListener('change', updateChart);
 
-    // 自动初始化
-    window.addEventListener('load', () => {
-      // 加载本地自动化设置（可选）
-      const automation = localStorage.getItem('aero-automation');
-      if (automation) {
-        try {
-          const s = JSON.parse(automation);
-          document.getElementById('targetTemp').value = s.targetTemp || '';
-          document.getElementById('targetHum').value = s.targetHum || '';
-          document.getElementById('phMin').value = s.phMin || '';
-          document.getElementById('phMax').value = s.phMax || '';
-          document.getElementById('ecMin').value = s.ecMin || '';
-          document.getElementById('ecMax').value = s.ecMax || '';
-          document.getElementById('timedMist').checked = s.timedMist || false;
-          document.getElementById('mistOn').value = s.mistOn || '';
-          document.getElementById('mistOff').value = s.mistOff || '';
-        } catch (e) {}
+    function updateChart(){
+      if(!trend) return;
+      const meta = seriesMeta(currentSeries);
+      $('chartName').textContent = meta.name;
+
+      const list = pref.history.slice(-50);
+      const labels = list.map(p => {
+        const d = new Date(p.t);
+        return d.toLocaleTimeString();
+      });
+      const values = list.map(p => p[currentSeries]).map(v => v === null ? null : Number(v));
+
+      trend.data.labels = labels;
+      trend.data.datasets[0].label = meta.name;
+      trend.data.datasets[0].data = values;
+      trend.update();
+
+      // stats
+      const nums = values.filter(v => typeof v === 'number' && Number.isFinite(v));
+      const statBody = $('statBody');
+      if(nums.length === 0){
+        statBody.innerHTML = `
+          <tr><td><strong>最大</strong></td><td>—</td></tr>
+          <tr><td><strong>最小</strong></td><td>—</td></tr>
+          <tr><td><strong>平均</strong></td><td>—</td></tr>
+          <tr><td><strong>最新</strong></td><td>—</td></tr>
+        `;
+        return;
       }
-      // 初始连接
-      connectMQTT();
-      updateConnectionStatus();
-    });
+      const max = Math.max(...nums);
+      const min = Math.min(...nums);
+      const avg = nums.reduce((a,b)=>a+b,0) / nums.length;
+      const last = nums[nums.length-1];
+      const f = (x)=> meta.digits === 0 ? fmtInt(x) : fmt(x, meta.digits);
+      statBody.innerHTML = `
+        <tr><td><strong>最大</strong></td><td>${f(max)} ${meta.unit}</td></tr>
+        <tr><td><strong>最小</strong></td><td>${f(min)} ${meta.unit}</td></tr>
+        <tr><td><strong>平均</strong></td><td>${f(avg)} ${meta.unit}</td></tr>
+        <tr><td><strong>最新</strong></td><td>${f(last)} ${meta.unit}</td></tr>
+      `;
+    }
+
+    /* ----------------------
+       Navigation & Filters
+    -----------------------*/
+    function showView(name){
+      for(const el of document.querySelectorAll('.view')) el.classList.remove('show');
+      const target = document.getElementById('view-' + name);
+      if(target) target.classList.add('show');
+
+      // active nav
+      for(const a of document.querySelectorAll('#nav a')) a.classList.remove('active');
+      const a = document.querySelector(`#nav a[data-view="${name}"]`);
+      if(a) a.classList.add('active');
+
+      // chart refresh
+      if(name === 'insights') updateChart();
+    }
+
+    function applyFilter(){
+      const q = $('filterInput').value.trim().toLowerCase();
+      const cards = document.querySelectorAll('[data-keywords]');
+      for(const c of cards){
+        const kw = (c.getAttribute('data-keywords') || '').toLowerCase();
+        c.style.display = (!q || kw.includes(q)) ? '' : 'none';
+      }
+    }
+
+    /* ----------------------
+       Settings Modal
+    -----------------------*/
+    function openSettings(){
+      $('settingsMask').classList.add('show');
+      $('settingsMask').setAttribute('aria-hidden','false');
+      // fill values
+      $('cfgBroker').value = cfg.broker;
+      $('cfgClientId').value = cfg.clientId;
+      $('cfgSub').value = cfg.subTopic;
+      $('cfgPub').value = cfg.pubTopic;
+      $('cfgDeviceFilter').value = cfg.deviceFilter || '';
+      $('cfgStatus').textContent = appState.connected ? '已连接' : '未连接';
+    }
+
+    function closeSettings(){
+      $('settingsMask').classList.remove('show');
+      $('settingsMask').setAttribute('aria-hidden','true');
+    }
+
+    function resetCfg(){
+      Object.assign(cfg, {...DEFAULT_CFG, clientId: 'aero-web-' + Math.random().toString(16).slice(2, 10)});
+      saveCfg();
+      openSettings();
+      toast('已恢复默认', '连接参数已恢复默认值。', 'ok');
+    }
+
+    function applyCfg(){
+      cfg.broker = $('cfgBroker').value.trim() || DEFAULT_CFG.broker;
+      cfg.clientId = $('cfgClientId').value.trim() || DEFAULT_CFG.clientId;
+      cfg.subTopic = $('cfgSub').value.trim() || DEFAULT_CFG.subTopic;
+      cfg.pubTopic = $('cfgPub').value.trim() || DEFAULT_CFG.pubTopic;
+      cfg.deviceFilter = $('cfgDeviceFilter').value || '';
+      saveCfg();
+      closeSettings();
+      connect();
+    }
+
+    function addDeviceOption(id){
+      const sel = $('cfgDeviceFilter');
+      if([...sel.options].some(o => o.value === id)) return;
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = id;
+      sel.appendChild(opt);
+    }
+
+    /* ----------------------
+       Controls events
+    -----------------------*/
+    function toggleSwitch(el){
+      const on = el.classList.contains('on');
+      setSwitch(el, !on);
+      return !on;
+    }
+
+    function bindControls(){
+      $('fanToggle').onclick = ()=> toggleSwitch($('fanToggle'));
+      $('heaterToggle').onclick = ()=> toggleSwitch($('heaterToggle'));
+      $('mistToggle').onclick = ()=> toggleSwitch($('mistToggle'));
+      $('lightToggle').onclick = ()=> toggleSwitch($('lightToggle'));
+
+      $('lightSlider').oninput = ()=> $('lightSliderVal').textContent = `${fmtInt($('lightSlider').value)}%`;
+      $('mistDutySlider').oninput = ()=> $('mistDutyVal').textContent = `${fmtInt($('mistDutySlider').value)}%`;
+
+      $('btnAllOff').onclick = ()=>{
+        setSwitch($('fanToggle'), false);
+        setSwitch($('heaterToggle'), false);
+        setSwitch($('mistToggle'), false);
+        setSwitch($('lightToggle'), false);
+        $('lightSlider').value = 0;
+        $('lightSliderVal').textContent = '0%';
+        $('mistDutySlider').value = 0;
+        $('mistDutyVal').textContent = '0%';
+        toast('已设置', '已切换为全部关闭（尚未发送）。', 'warn');
+      };
+
+      $('btnApplyControls').onclick = ()=>{
+        const payload = {
+          fan: $('fanToggle').classList.contains('on') ? 1 : 0,
+          heater: $('heaterToggle').classList.contains('on') ? 1 : 0,
+          mist: $('mistToggle').classList.contains('on') ? 1 : 0,
+          light: $('lightToggle').classList.contains('on') ? 1 : 0,
+          lightPWM: Number($('lightSlider').value),
+          mistDuty: Number($('mistDutySlider').value)
+        };
+        publish(payload);
+        toast('已发送', '控制指令已发送到设备。', 'ok');
+      };
+
+      // profiles
+      document.querySelectorAll('[data-profile]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const p = btn.getAttribute('data-profile');
+          publish({ profile: p });
+          toast('已发送', `已发送场景：${p}`, 'ok');
+        });
+      });
+
+      // targets
+      $('targetTemp').oninput = ()=> $('targetTempVal').textContent = `${$('targetTemp').value}°C`;
+      $('targetHum').oninput = ()=> $('targetHumVal').textContent = `${$('targetHum').value}%`;
+
+      $('btnResetTargets').onclick = ()=>{
+        $('targetTemp').value = 26;
+        $('targetHum').value = 65;
+        $('targetTempVal').textContent = '26°C';
+        $('targetHumVal').textContent = '65%';
+      };
+
+      $('btnSaveTargets').onclick = ()=>{
+        pref.targets.temp = Number($('targetTemp').value);
+        pref.targets.hum  = Number($('targetHum').value);
+        saveTargets();
+        updateAll();
+        publish({ setpoints: { temp: pref.targets.temp, hum: pref.targets.hum } });
+        toast('已保存', '目标参数已保存并发送。', 'ok');
+      };
+
+      // ranges
+      const updateRangeText = ()=>{
+        pref.ranges.ecMin = Math.min(Number($('ecMin').value), Number($('ecMax').value));
+        pref.ranges.ecMax = Math.max(Number($('ecMin').value), Number($('ecMax').value));
+        pref.ranges.phMin = Math.min(Number($('phMin').value), Number($('phMax').value));
+        pref.ranges.phMax = Math.max(Number($('phMin').value), Number($('phMax').value));
+        $('rangeText').textContent = `EC ${pref.ranges.ecMin.toFixed(1)}–${pref.ranges.ecMax.toFixed(1)} / pH ${pref.ranges.phMin.toFixed(1)}–${pref.ranges.phMax.toFixed(1)}`;
+        updateBadges();
+      };
+
+      ['ecMin','ecMax','phMin','phMax'].forEach(id=> $(id).oninput = updateRangeText);
+
+      $('btnResetRanges').onclick = ()=>{
+        $('ecMin').value = 0.8; $('ecMax').value = 2.0;
+        $('phMin').value = 5.8; $('phMax').value = 6.5;
+        updateRangeText();
+      };
+
+      $('btnSaveRanges').onclick = ()=>{
+        updateRangeText();
+        saveRanges();
+        publish({ ranges: pref.ranges });
+        toast('已保存', '范围参数已保存并发送。', 'ok');
+      };
+
+      // schedule
+      $('btnResetSchedule').onclick = ()=>{
+        $('lightStart').value = '08:00';
+        $('lightEnd').value = '20:00';
+        $('mistOn').value = 3;
+        $('mistOff').value = 180;
+      };
+
+      $('btnSaveSchedule').onclick = ()=>{
+        pref.schedule.lightStart = $('lightStart').value;
+        pref.schedule.lightEnd = $('lightEnd').value;
+        pref.schedule.mistOn = Number($('mistOn').value);
+        pref.schedule.mistOff = Number($('mistOff').value);
+        saveSchedule();
+        publish({ schedule: pref.schedule });
+        toast('已保存', '计划已保存并发送。', 'ok');
+      };
+
+      // quick buttons
+      $('btnQuickRefresh').onclick = ()=>{
+        updateAll();
+        updateChart();
+        toast('已刷新', '界面已刷新。', 'ok');
+      };
+
+      $('btnExport').onclick = exportCsv;
+
+      // device page
+      $('btnOpenSettings').onclick = openSettings;
+      $('btnOpenTheme').onclick = ()=> $('btnTheme').click();
+      $('btnClearCache').onclick = ()=>{
+        localStorage.removeItem('aero_web_history');
+        pref.history = [];
+        saveHistory();
+        updateChart();
+        toast('已清空', '本地历史已清空。', 'ok');
+      };
+    }
+
+    function exportCsv(){
+      const rows = [['time','temp','hum','lux','ec','ph','waterLevelState']];
+      for(const p of pref.history.slice(-300)){
+        rows.push([
+          new Date(p.t).toISOString(),
+          p.temp ?? '',
+          p.hum ?? '',
+          p.lux ?? '',
+          p.ec ?? '',
+          p.ph ?? '',
+          p.wls ?? ''
+        ]);
+      }
+      const csv = rows.map(r => r.map(v=> String(v).replaceAll('"','""')).map(v=> `"${v}"`).join(',')).join('\n');
+      downloadText(`aero_export_${Date.now()}.csv`, csv);
+      toast('导出完成', '已导出 CSV 文件。', 'ok');
+    }
+
+    /* ----------------------
+       Tabs
+    -----------------------*/
+    function bindTabs(){
+      // KPIs tabs (visual only)
+      $('kpiModeTabs').querySelectorAll('.tab').forEach(t=>{
+        t.onclick = ()=>{
+          $('kpiModeTabs').querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+          t.classList.add('active');
+          const mode = t.getAttribute('data-mode');
+          toast('模式切换', mode === 'live' ? '已切换到实时视图' : (mode === 'today' ? '已切换到今日趋势' : '已切换到健康概览'), 'ok');
+        }
+      });
+
+      // control tabs (placeholder)
+      $('controlTabs').querySelectorAll('.tab').forEach(t=>{
+        t.onclick = ()=>{
+          $('controlTabs').querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+          t.classList.add('active');
+        };
+      });
+
+      // auto tabs
+      $('autoTabs').querySelectorAll('.tab').forEach(t=>{
+        t.onclick = ()=>{
+          $('autoTabs').querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+          t.classList.add('active');
+        };
+      });
+
+      // chart tabs
+      $('chartTabs').querySelectorAll('.tab').forEach(t=>{
+        t.onclick = ()=>{
+          $('chartTabs').querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+          t.classList.add('active');
+          currentSeries = t.getAttribute('data-series');
+          updateChart();
+        };
+      });
+
+      // device tabs
+      $('deviceTabs').querySelectorAll('.tab').forEach(t=>{
+        t.onclick = ()=>{
+          $('deviceTabs').querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+          t.classList.add('active');
+        };
+      });
+    }
+
+    /* ----------------------
+       Nav bindings
+    -----------------------*/
+    function bindNav(){
+      document.querySelectorAll('#nav a').forEach(a=>{
+        a.onclick = (e)=>{
+          e.preventDefault();
+          const v = a.getAttribute('data-view');
+          showView(v);
+        };
+      });
+    }
+
+    /* ----------------------
+       Settings bindings
+    -----------------------*/
+    function bindSettings(){
+      $('btnConnect').onclick = openSettings;
+      $('btnCloseSettings').onclick = closeSettings;
+      $('settingsMask').onclick = (e)=>{ if(e.target === $('settingsMask')) closeSettings(); };
+      $('btnSaveCfg').onclick = applyCfg;
+      $('btnResetCfg').onclick = resetCfg;
+      $('btnDisconnect').onclick = disconnect;
+
+      $('btnTheme').onclick = ()=>{
+        const next = (pref.theme === 'dark') ? 'light' : 'dark';
+        setTheme(next);
+        toast('主题切换', next === 'dark' ? '已切换到深色主题' : '已切换到浅色主题', 'ok');
+      };
+    }
+
+    /* ----------------------
+       Filter
+    -----------------------*/
+    $('filterInput').addEventListener('input', applyFilter);
+
+    /* ----------------------
+       Init
+    -----------------------*/
+    function init(){
+      // set inputs from pref
+      $('targetTemp').value = pref.targets.temp;
+      $('targetHum').value = pref.targets.hum;
+      $('targetTempVal').textContent = `${pref.targets.temp}°C`;
+      $('targetHumVal').textContent = `${pref.targets.hum}%`;
+
+      $('ecMin').value = pref.ranges.ecMin;
+      $('ecMax').value = pref.ranges.ecMax;
+      $('phMin').value = pref.ranges.phMin;
+      $('phMax').value = pref.ranges.phMax;
+      $('rangeText').textContent = `EC ${pref.ranges.ecMin.toFixed(1)}–${pref.ranges.ecMax.toFixed(1)} / pH ${pref.ranges.phMin.toFixed(1)}–${pref.ranges.phMax.toFixed(1)}`;
+
+      $('lightStart').value = pref.schedule.lightStart;
+      $('lightEnd').value = pref.schedule.lightEnd;
+      $('mistOn').value = pref.schedule.mistOn;
+      $('mistOff').value = pref.schedule.mistOff;
+
+      // settings fields
+      $('cfgBroker').value = cfg.broker;
+      $('cfgClientId').value = cfg.clientId;
+      $('cfgSub').value = cfg.subTopic;
+      $('cfgPub').value = cfg.pubTopic;
+
+      buildChart();
+      bindNav();
+      bindSettings();
+      bindTabs();
+      bindControls();
+
+      // buttons
+      $('btnOpenSettings').onclick = openSettings;
+      $('btnOpenTheme').onclick = ()=> $('btnTheme').click();
+      $('btnClearCache').onclick = ()=>{
+        localStorage.removeItem('aero_web_history');
+        pref.history = [];
+        saveHistory();
+        updateChart();
+        toast('已清空', '本地历史已清空。', 'ok');
+      };
+
+      // connect automatically
+      connect();
+
+      // periodic status tick
+      setInterval(()=>{
+        // show "last update"
+        if(appState.lastUpdateTs){
+          $('lastUpdateText').textContent = new Date(appState.lastUpdateTs).toLocaleTimeString();
+        }
+        // if no message for too long, show offline hint
+        const age = appState.lastUpdateTs ? (Date.now() - appState.lastUpdateTs) : null;
+        if(age !== null && age > 8000){
+          $('devBadge').textContent = '长时间未收到数据';
+          $('stm32Dot').className = 'dot bad';
+          $('stm32Text').textContent = '等待更新';
+        }
+      }, 1000);
+
+      updateAll();
+      updateChart();
+    }
+
+    init();
   </script>
 </body>
 </html>
