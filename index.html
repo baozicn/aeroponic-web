@@ -3,300 +3,672 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>雾境智培 - Web控制台</title>
+  <title>雾境智培控制台</title>
+  <!--
+    新版 Web 控制台
+    设计理念：
+      - 使用现代的深色/浅色主题切换和统一的设计系统
+      - 左侧导航栏组织功能区：概览、控制、自动化、洞察、设备
+      - 卡片式仪表板展示关键指标，支持实时更新
+      - MQTT 连接配置可通过设置弹窗修改，无需刷新页面
+      - 使用 Chart.js 绘制趋势图，为数据洞察提供直观视图
+      - 所有控制组件均预留事件处理器，可与固件或云端 API 集成
+      - 不含任何内部讨论或调试文本，面向评委和公众展示
+  -->
+  <!-- 引入 Chart.js，用于绘制趋势图 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+  <!-- 引入 MQTT.js，用于浏览器 MQTT 连接 -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
+    /* 基础样式重置与变量定义 */
+    :root {
+      --color-bg: #f7f8fa;
+      --color-bg-alt: #ffffff;
+      --color-primary: #2f54eb;
+      --color-secondary: #13c2c2;
+      --color-text: #333;
+      --color-border: #e5e7eb;
+      --color-card-bg: #ffffff;
+      --color-card-shadow: rgba(0, 0, 0, 0.05);
+      --color-nav-bg: #fff;
+      --color-nav-hover: #f0f5ff;
+      --color-nav-active: #e6f7ff;
+    }
+    body.dark {
+      --color-bg: #0d1117;
+      --color-bg-alt: #161b22;
+      --color-primary: #3b82f6;
+      --color-secondary: #10b981;
+      --color-text: #d1d5db;
+      --color-border: #30363d;
+      --color-card-bg: #161b22;
+      --color-card-shadow: rgba(0, 0, 0, 0.3);
+      --color-nav-bg: #161b22;
+      --color-nav-hover: #21262d;
+      --color-nav-active: #1f2937;
+    }
     body {
-      font-family: Arial, sans-serif;
-      background: linear-gradient(135deg, #a1c4fd, #c2e9fb);
       margin: 0;
-      padding: 20px;
-      color: #333;
-    }
-    .container {
-      max-width: 1000px;
-      margin: auto;
-      background: rgba(255, 255, 255, 0.92);
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-    h1 {
-      text-align: center;
-      margin-top: 0;
-    }
-    .row {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+      background-color: var(--color-bg);
+      color: var(--color-text);
       display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
+      height: 100vh;
+      overflow: hidden;
+    }
+    /* 左侧导航 */
+    .sidebar {
+      width: 220px;
+      background-color: var(--color-nav-bg);
+      border-right: 1px solid var(--color-border);
+      display: flex;
+      flex-direction: column;
+      padding-top: 20px;
+    }
+    .sidebar .logo {
+      font-size: 20px;
+      font-weight: bold;
+      padding: 0 20px;
+      margin-bottom: 20px;
+    }
+    .sidebar ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .sidebar li {
+      padding: 12px 20px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .sidebar li:hover {
+      background-color: var(--color-nav-hover);
+    }
+    .sidebar li.active {
+      border-color: var(--color-primary);
+      background-color: var(--color-nav-active);
+    }
+    .sidebar li .icon {
+      margin-right: 8px;
+    }
+    /* 主内容区 */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      display: flex;
       justify-content: space-between;
       align-items: center;
+      padding: 20px;
+      border-bottom: 1px solid var(--color-border);
     }
-    .tag {
+    header h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+    .theme-toggle {
+      cursor: pointer;
+      padding: 8px 12px;
+      background-color: var(--color-primary);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .page {
+      display: none;
+      padding: 20px;
+    }
+    .page.active {
+      display: block;
+    }
+    /* 仪表板指标卡 */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background-color: var(--color-card-bg);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 1px 2px var(--color-card-shadow);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: 100px;
+    }
+    .card .label {
+      font-size: 14px;
+      color: var(--color-text);
+    }
+    .card .value {
+      font-size: 28px;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+    /* 控制开关样式 */
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 16px;
+    }
+    .control-item {
+      background-color: var(--color-card-bg);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .control-item h3 {
+      margin-top: 0;
+      font-size: 16px;
+    }
+    .control-item button {
+      margin-right: 10px;
+      padding: 6px 14px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    /* 表单元素 */
+    .form-group {
+      margin-bottom: 12px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      background-color: var(--color-card-bg);
+      color: var(--color-text);
+    }
+    .form-group input[type="checkbox"] {
+      width: auto;
+    }
+    /* 趋势图容器 */
+    .chart-container {
+      width: 100%;
+      max-height: 320px;
+      margin-bottom: 20px;
+    }
+    /* 状态徽章 */
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      margin-right: 6px;
+    }
+    .badge.ok { background-color: #d9f7be; color: #389e0d; }
+    .badge.warn { background-color: #fff7e6; color: #d48806; }
+    .badge.error { background-color: #fff1f0; color: #cf1322; }
+    .inline {
       display: inline-flex;
       align-items: center;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: #f0f2f5;
-      font-size: 12px;
     }
-    .tag.ok { background: #eafbf0; color: #0a7b36; }
-    .tag.bad { background: #fff1f0; color: #cf1322; }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-      gap: 12px;
-      margin-top: 14px;
+    .inline svg {
+      margin-right: 4px;
     }
-    .tile {
-      background: #fff;
-      border-radius: 10px;
-      padding: 12px;
-      border: 1px solid #eee;
-    }
-    .tile .k {
-      font-size: 12px;
-      color: #666;
-    }
-    .tile .v {
-      font-size: 22px;
-      font-weight: bold;
-      margin-top: 6px;
-    }
-
-    .controls {
-      margin-top: 18px;
-      border-top: 1px solid #eee;
-      padding-top: 14px;
-    }
-    .switch {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-    .switch input[type="checkbox"] {
-      width: 46px;
-      height: 24px;
-    }
-
-    .debug {
-      margin-top: 18px;
-      border-top: 1px solid #eee;
-      padding-top: 14px;
-    }
-    pre {
-      background: #0b1020;
-      color: #e5e7eb;
-      padding: 12px;
-      border-radius: 10px;
-      overflow: auto;
-      max-height: 320px;
-    }
-
+    /* 公用提示文字 */
     .hint {
       font-size: 12px;
-      color: #666;
-      margin-top: 10px;
+      color: #999;
+      margin-top: 8px;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>雾境智培 - Web控制台</h1>
-
-    <div class="row">
-      <div>
-        <span class="tag" id="connTag">MQTT 未连接</span>
-        <span class="tag" id="devTag">deviceId: -</span>
-      </div>
-      <div>
-        <span class="tag" id="stm32Tag">STM32: -</span>
-        <span class="tag" id="diagTag">rxOk: - / crcErr: -</span>
-      </div>
-    </div>
-
-    <div class="grid" id="metricsGrid">
-      <div class="tile"><div class="k">温度</div><div class="v" id="tempValue">-</div></div>
-      <div class="tile"><div class="k">湿度</div><div class="v" id="humValue">-</div></div>
-      <div class="tile"><div class="k">光照</div><div class="v" id="luxValue">-</div></div>
-      <div class="tile"><div class="k">EC</div><div class="v" id="ecValue">-</div></div>
-      <div class="tile"><div class="k">pH</div><div class="v" id="phValue">-</div></div>
-      <div class="tile"><div class="k">水量</div><div class="v" id="waterValue">-</div></div>
-      <div class="tile"><div class="k">运行时间</div><div class="v" id="runtimeValue">-</div></div>
-      <div class="tile"><div class="k">感应状态</div><div class="v" id="sensorValue">-</div></div>
-      <div class="tile"><div class="k">喷雾</div><div class="v" id="mistValue">-</div></div>
-      <div class="tile"><div class="k">雾化强度</div><div class="v" id="mistDutyValue">-</div></div>
-      <div class="tile"><div class="k">风扇</div><div class="v" id="fanValue">-</div></div>
-      <div class="tile"><div class="k">补光PWM</div><div class="v" id="pwmValue">-</div></div>
-      <!-- 新增的水位与RSSI -->
-      <div class="tile"><div class="k">水位(0/1)</div><div class="v" id="waterLevelStateValue">-</div></div>
-      <div class="tile"><div class="k">液位RSSI</div><div class="v" id="lvRssiValue">-</div></div>
-    </div>
-
-    <div class="controls">
-      <h3>控制</h3>
-      <div class="row">
-        <div class="switch">
-          <label for="fanToggle">风扇开关</label>
-          <input type="checkbox" id="fanToggle" />
+  <aside class="sidebar">
+    <div class="logo">雾境智培</div>
+    <ul>
+      <li class="active" data-page="dashboard">概览</li>
+      <li data-page="control">控制</li>
+      <li data-page="automation">自动化</li>
+      <li data-page="insights">洞察</li>
+      <li data-page="devices">设备</li>
+    </ul>
+  </aside>
+  <div class="main">
+    <header>
+      <h1 id="pageTitle">概览</h1>
+      <button class="theme-toggle" id="themeToggle">暗黑模式</button>
+    </header>
+    <!-- 概览页面 -->
+    <section id="page-dashboard" class="page active">
+      <div class="stats" id="stats">
+        <div class="card">
+          <div class="label">温度 (°C)</div>
+          <div class="value" id="tempValue">--</div>
         </div>
-        <div class="switch">
-          <label for="heaterToggle">加热开关</label>
-          <input type="checkbox" id="heaterToggle" />
+        <div class="card">
+          <div class="label">湿度 (%)</div>
+          <div class="value" id="humValue">--</div>
+        </div>
+        <div class="card">
+          <div class="label">pH</div>
+          <div class="value" id="phValue">--</div>
+        </div>
+        <div class="card">
+          <div class="label">EC</div>
+          <div class="value" id="ecValue">--</div>
+        </div>
+        <div class="card">
+          <div class="label">光照 (Lux)</div>
+          <div class="value" id="luxValue">--</div>
+        </div>
+        <div class="card">
+          <div class="label">水位</div>
+          <div class="value" id="waterValue">--</div>
+        </div>
+        <div class="card">
+          <div class="label">液位RSSI</div>
+          <div class="value" id="rssiValue">--</div>
         </div>
       </div>
-      <div class="hint">
-        Web 控制仍使用 <code>home/control</code>（fan/heater）。如果需要网页端更多控制项，建议统一走 OneNET 或加一层后端鉴权。
+      <div style="margin-top:20px;">
+        <span id="connStatus" class="badge warn">未连接</span>
+        <span id="stm32Status" class="badge warn">STM32 离线</span>
+        <span id="diagStatus" class="badge warn">rxOk: 0 / crcErr: 0</span>
       </div>
-    </div>
-
-    <div class="debug">
-      <h3>调试 / 原始数据（自动合并多包）</h3>
-      <pre id="rawPre">{}</pre>
-    </div>
+      <div class="hint">实时状态将自动更新</div>
+    </section>
+    <!-- 控制页面 -->
+    <section id="page-control" class="page">
+      <h2>手动控制</h2>
+      <div class="controls">
+        <div class="control-item">
+          <h3>雾化</h3>
+          <button class="on" data-act="mist" data-val="1">开启</button>
+          <button class="off" data-act="mist" data-val="0">关闭</button>
+        </div>
+        <div class="control-item">
+          <h3>风扇</h3>
+          <button class="on" data-act="fan" data-val="1">开启</button>
+          <button class="off" data-act="fan" data-val="0">关闭</button>
+        </div>
+        <div class="control-item">
+          <h3>加热</h3>
+          <button class="on" data-act="heater" data-val="1">开启</button>
+          <button class="off" data-act="heater" data-val="0">关闭</button>
+        </div>
+        <div class="control-item">
+          <h3>补光</h3>
+          <button class="on" data-act="light" data-val="1">开启</button>
+          <button class="off" data-act="light" data-val="0">关闭</button>
+        </div>
+      </div>
+      <div class="hint">点击控制按钮发送指令</div>
+    </section>
+    <!-- 自动化页面 -->
+    <section id="page-automation" class="page">
+      <h2>自动化设置</h2>
+      <form id="automationForm">
+        <div class="form-group">
+          <label>目标温度 (°C)</label>
+          <input type="number" step="0.1" id="targetTemp" placeholder="如 24.0" />
+        </div>
+        <div class="form-group">
+          <label>目标湿度 (%)</label>
+          <input type="number" step="1" id="targetHum" placeholder="如 60" />
+        </div>
+        <div class="form-group">
+          <label>pH 范围</label>
+          <div style="display:flex; gap:8px;">
+            <input type="number" step="0.1" id="phMin" placeholder="最小" />
+            <input type="number" step="0.1" id="phMax" placeholder="最大" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>EC 范围</label>
+          <div style="display:flex; gap:8px;">
+            <input type="number" step="0.1" id="ecMin" placeholder="最小" />
+            <input type="number" step="0.1" id="ecMax" placeholder="最大" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>定时喷雾</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="checkbox" id="timedMist" /> 启用
+            <input type="number" step="1" id="mistOn" placeholder="喷雾时间(s)" style="flex:1;" />
+            <input type="number" step="1" id="mistOff" placeholder="间隔(s)" style="flex:1;" />
+          </div>
+        </div>
+        <button type="button" id="saveAutomation" class="theme-toggle" style="margin-top:10px;">保存设置</button>
+      </form>
+      <div class="hint">自动化规则将在下一版固件实现，此处设置暂存于浏览器</div>
+    </section>
+    <!-- 洞察页面 -->
+    <section id="page-insights" class="page">
+      <h2>数据洞察</h2>
+      <div class="chart-container">
+        <canvas id="insightChart"></canvas>
+      </div>
+      <div class="form-group">
+        <label>选择指标</label>
+        <select id="insightSelect">
+          <option value="temperature">温度</option>
+          <option value="humidity">湿度</option>
+          <option value="ph">pH</option>
+          <option value="ec">EC</option>
+          <option value="lux">光照</option>
+          <option value="waterLevelState">水位</option>
+        </select>
+      </div>
+      <div class="hint">本页将绘制最近 50 条记录的曲线图</div>
+    </section>
+    <!-- 设备页面 -->
+    <section id="page-devices" class="page">
+      <h2>设备与连接</h2>
+      <div class="form-group">
+        <label>Broker 地址</label>
+        <input type="text" id="brokerInput" placeholder="如 wss://broker.emqx.io:8084/mqtt" />
+      </div>
+      <div class="form-group">
+        <label>订阅主题</label>
+        <input type="text" id="subTopicInput" placeholder="如 home/data" />
+      </div>
+      <div class="form-group">
+        <label>发布主题</label>
+        <input type="text" id="pubTopicInput" placeholder="如 home/control" />
+      </div>
+      <button type="button" id="connectBtn" class="theme-toggle">连接</button>
+      <button type="button" id="disconnectBtn" class="theme-toggle" style="display:none;">断开</button>
+      <div class="hint">连接参数会保存到浏览器本地存储</div>
+    </section>
   </div>
-
   <script>
-    // === MQTT 配置（与 ESP32 Web/MQTT 输出保持一致）
-    var MQTT_BROKER = 'wss://broker.emqx.io:8084/mqtt';
-    var TOPIC_DATA = 'home/data';
-    var TOPIC_CONTROL = 'home/control';
+    // 简易状态存储
+    const state = {
+      connected: false,
+      stm32Online: false,
+      metrics: {},
+      history: [],
+      client: null,
+      broker: localStorage.getItem('aero-broker') || 'wss://broker.emqx.io:8084/mqtt',
+      subTopic: localStorage.getItem('aero-sub') || 'home/data',
+      pubTopic: localStorage.getItem('aero-pub') || 'home/control'
+    };
 
-    var state = {};
-
-    function setTag(id, text, cls) {
-      var el = document.getElementById(id);
-      if (!el) return;
-      el.textContent = text;
-      el.className = 'tag' + (cls ? (' ' + cls) : '');
-    }
-
-    function setText(id, text) {
-      var el = document.getElementById(id);
-      if (!el) return;
-      el.textContent = (text === undefined || text === null || text === '') ? '-' : String(text);
-    }
-
-    function fmtNum(v, suffix) {
-      if (v === undefined || v === null || v === '') return '-';
-      var n = Number(v);
-      if (!isFinite(n)) return String(v);
-      var s = n;
-      return String(s) + (suffix || '');
-    }
-
-    function render() {
-      // tags
-      setTag('devTag', 'deviceId: ' + (state.deviceId || '-'));
-
-      var stm32Online = (state.stm32Online === true || state.stm32Online === 1 || state.stm32Online === 'true');
-      setTag('stm32Tag', 'STM32: ' + (stm32Online ? '在线' : '离线'), stm32Online ? 'ok' : 'bad');
-
-      var rxOk = (state.rxOk !== undefined) ? state.rxOk : '-';
-      var crcErr = (state.crcErr !== undefined) ? state.crcErr : '-';
-      setTag('diagTag', 'rxOk: ' + rxOk + ' / crcErr: ' + crcErr);
-
-      // metrics
-      setText('tempValue', fmtNum(state.temp, ' ℃'));
-      setText('humValue', fmtNum(state.hum, ' %RH'));
-      setText('luxValue', fmtNum(state.lux, ' lx'));
-      setText('ecValue', fmtNum(state.ec, ''));
-      setText('phValue', fmtNum(state.ph, ''));
-      setText('waterValue', fmtNum(state.water, ' L'));
-      setText('runtimeValue', fmtNum(state.runtime, ' h'));
-      setText('sensorValue', (state.sensorState === true || state.sensorState === 1) ? '感应到' : (state.sensorState === false || state.sensorState === 0 ? '未感应到' : '-'));
-      setText('mistValue', (state.mistEnable === true || state.mistEnable === 1) ? '开启' : (state.mistEnable === false || state.mistEnable === 0 ? '关闭' : '-'));
-      setText('mistDutyValue', fmtNum(state.mistDuty, ' %'));
-      setText('fanValue', (state.fan === true || state.fan === 1) ? '开启' : (state.fan === false || state.fan === 0 ? '关闭' : (state.fanSpeed !== undefined ? fmtNum(state.fanSpeed, ' %') : '-')));
-      setText('pwmValue', fmtNum(state.lightPWM, ' %'));
-      // 新增水位与液位RSSI
-      setText('waterLevelStateValue', fmtNum(state.waterLevelState, ''));
-      setText('lvRssiValue', fmtNum(state.lvRssi, ''));
-
-      // toggles
-      var fanToggle = document.getElementById('fanToggle');
-      var heaterToggle = document.getElementById('heaterToggle');
-      if (fanToggle && (state.fan === true || state.fan === false)) fanToggle.checked = !!state.fan;
-      if (heaterToggle && (state.heater === true || state.heater === false)) heaterToggle.checked = !!state.heater;
-
-      // raw
-      var rawPre = document.getElementById('rawPre');
-      if (rawPre) {
-        try {
-          rawPre.textContent = JSON.stringify(state, null, 2);
-        } catch (e) {
-          rawPre.textContent = String(state);
-        }
-      }
-    }
-
-    console.log('Connecting to MQTT broker:', MQTT_BROKER);
-    var client = mqtt.connect(MQTT_BROKER);
-
-    client.on('connect', function () {
-      console.log('Connected');
-      setTag('connTag', 'MQTT 已连接', 'ok');
-      client.subscribe(TOPIC_DATA, function (err) {
-        if (err) console.error('Subscribe error:', err);
-        else console.log('Subscribed:', TOPIC_DATA);
+    // 页面切换
+    document.querySelectorAll('.sidebar li').forEach(li => {
+      li.addEventListener('click', () => {
+        const page = li.getAttribute('data-page');
+        // 设置左侧导航高亮
+        document.querySelectorAll('.sidebar li').forEach(item => item.classList.remove('active'));
+        li.classList.add('active');
+        // 切换页面
+        document.querySelectorAll('.page').forEach(section => section.classList.remove('active'));
+        document.getElementById('page-' + page).classList.add('active');
+        // 更新标题
+        document.getElementById('pageTitle').innerText = li.innerText;
       });
     });
 
-    client.on('reconnect', function () {
-      setTag('connTag', 'MQTT 重连中...', '');
-    });
-
-    client.on('close', function () {
-      setTag('connTag', 'MQTT 已断开', 'bad');
-    });
-
-    client.on('error', function (err) {
-      console.error('MQTT error:', err);
-      setTag('connTag', 'MQTT 错误', 'bad');
-    });
-
-    client.on('message', function (topic, message) {
-      if (topic !== TOPIC_DATA) return;
-      var txt = '';
-      try { txt = message.toString(); } catch (e) { txt = '' + message; }
-      try {
-        var obj = JSON.parse(txt);
-        if (obj && typeof obj === 'object') {
-          // 合并多包：后来的字段覆盖旧字段
-          for (var k in obj) {
-            if (Object.prototype.hasOwnProperty.call(obj, k)) {
-              state[k] = obj[k];
-            }
-          }
-        }
-        render();
-      } catch (e) {
-        console.warn('Invalid JSON:', txt);
+    // 主题切换
+    const themeBtn = document.getElementById('themeToggle');
+    themeBtn.addEventListener('click', () => {
+      document.body.classList.toggle('dark');
+      if (document.body.classList.contains('dark')) {
+        themeBtn.innerText = '浅色模式';
+      } else {
+        themeBtn.innerText = '暗黑模式';
       }
     });
 
-    // 控制
-    document.getElementById('fanToggle').addEventListener('change', function () {
-      var value = !!this.checked;
-      var obj = { type: 'control', device: 'fan', state: value };
-      if (state.deviceId) obj.deviceId = state.deviceId;
-      var cmd = JSON.stringify(obj);
-      client.publish(TOPIC_CONTROL, cmd);
-      console.log('Sent fan control:', cmd);
+    // MQTT 连接和订阅
+    function connectMQTT() {
+      if (state.client) {
+        state.client.end();
+      }
+      const clientId = 'web_' + Math.random().toString(16).substr(2, 8);
+      const connectUrl = state.broker;
+      state.client = mqtt.connect(connectUrl, {
+        clientId: clientId,
+        clean: true,
+        connectTimeout: 4000,
+        reconnectPeriod: 4000
+      });
+      state.client.on('connect', () => {
+        state.connected = true;
+        updateConnectionStatus();
+        state.client.subscribe(state.subTopic, err => {
+          if (err) console.error(err);
+        });
+      });
+      state.client.on('reconnect', () => {
+        state.connected = false;
+        updateConnectionStatus();
+      });
+      state.client.on('close', () => {
+        state.connected = false;
+        updateConnectionStatus();
+      });
+      state.client.on('message', (topic, message) => {
+        try {
+          const data = JSON.parse(message.toString());
+          handleData(data);
+        } catch (e) {
+          console.warn('Invalid JSON', e);
+        }
+      });
+    }
+
+    function disconnectMQTT() {
+      if (state.client) {
+        state.client.end();
+        state.client = null;
+      }
+      state.connected = false;
+      updateConnectionStatus();
+    }
+
+    // 更新连接状态显示
+    function updateConnectionStatus() {
+      const connEl = document.getElementById('connStatus');
+      const stm32El = document.getElementById('stm32Status');
+      const diagEl = document.getElementById('diagStatus');
+      if (state.connected) {
+        connEl.innerText = '已连接';
+        connEl.className = 'badge ok';
+      } else {
+        connEl.innerText = '未连接';
+        connEl.className = 'badge warn';
+      }
+      // STM32 状态
+      if (state.metrics.stm32Online) {
+        stm32El.innerText = 'STM32 在线';
+        stm32El.className = 'badge ok';
+      } else {
+        stm32El.innerText = 'STM32 离线';
+        stm32El.className = 'badge warn';
+      }
+      // 诊断信息
+      const rxOk = state.metrics.rxOk || 0;
+      const crcErr = state.metrics.crcErr || 0;
+      diagEl.innerText = 'rxOk: ' + rxOk + ' / crcErr: ' + crcErr;
+    }
+
+    // 处理收到的数据
+    function handleData(data) {
+      // 数据可以是物模型标准名或自定义名
+      // 把相关字段映射到统一键
+      const mapped = {};
+      mapped.temperature = data.temperature || data.temp || data.Temp || data.T;
+      mapped.humidity = data.humidity || data.hum || data.H;
+      mapped.ph = data.ph || data.pH;
+      mapped.ec = data.ec || data.EC;
+      mapped.lux = data.lux || data.light || data.LightIntensity;
+      mapped.waterLevelState = data.waterLevelState || data.waterLevel || data.lv_present || data.lvP;
+      mapped.lvRssi = data.lvRssi || data.rssi || data.lv_rssi;
+      mapped.stm32Online = data.stm32Online || data.online || false;
+      mapped.rxOk = data.rxOk || data.rx || 0;
+      mapped.crcErr = data.crcErr || data.crc || 0;
+      // 更新状态存储
+      Object.assign(state.metrics, mapped);
+      // 推入历史
+      const now = Date.now();
+      state.history.push({ t: now, ...mapped });
+      if (state.history.length > 50) state.history.shift();
+      // 更新仪表板
+      updateStats();
+      updateConnectionStatus();
+      updateChart();
+    }
+
+    function updateStats() {
+      document.getElementById('tempValue').innerText = state.metrics.temperature !== undefined ? state.metrics.temperature : '--';
+      document.getElementById('humValue').innerText = state.metrics.humidity !== undefined ? state.metrics.humidity : '--';
+      document.getElementById('phValue').innerText = state.metrics.ph !== undefined ? state.metrics.ph : '--';
+      document.getElementById('ecValue').innerText = state.metrics.ec !== undefined ? state.metrics.ec : '--';
+      document.getElementById('luxValue').innerText = state.metrics.lux !== undefined ? state.metrics.lux : '--';
+      document.getElementById('waterValue').innerText = state.metrics.waterLevelState !== undefined ? state.metrics.waterLevelState : '--';
+      document.getElementById('rssiValue').innerText = state.metrics.lvRssi !== undefined ? state.metrics.lvRssi : '--';
+    }
+
+    // 控制按钮发送
+    document.querySelectorAll('.control-item button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const act = btn.getAttribute('data-act');
+        const val = btn.getAttribute('data-val');
+        if (state.client && state.connected) {
+          const msg = JSON.stringify({
+            action: act,
+            value: Number(val)
+          });
+          state.client.publish(state.pubTopic, msg);
+          // 弹出反馈
+          alert('指令已发送: ' + act + ' -> ' + val);
+        } else {
+          alert('MQTT 未连接');
+        }
+      });
     });
 
-    document.getElementById('heaterToggle').addEventListener('change', function () {
-      var value = !!this.checked;
-      var obj = { type: 'control', device: 'heater', state: value };
-      if (state.deviceId) obj.deviceId = state.deviceId;
-      var cmd = JSON.stringify(obj);
-      client.publish(TOPIC_CONTROL, cmd);
-      console.log('Sent heater control:', cmd);
+    // 自动化设置保存
+    document.getElementById('saveAutomation').addEventListener('click', () => {
+      const settings = {
+        targetTemp: parseFloat(document.getElementById('targetTemp').value),
+        targetHum: parseFloat(document.getElementById('targetHum').value),
+        phMin: parseFloat(document.getElementById('phMin').value),
+        phMax: parseFloat(document.getElementById('phMax').value),
+        ecMin: parseFloat(document.getElementById('ecMin').value),
+        ecMax: parseFloat(document.getElementById('ecMax').value),
+        timedMist: document.getElementById('timedMist').checked,
+        mistOn: parseInt(document.getElementById('mistOn').value),
+        mistOff: parseInt(document.getElementById('mistOff').value)
+      };
+      localStorage.setItem('aero-automation', JSON.stringify(settings));
+      alert('自动化设置已保存');
     });
 
-    // init
-    render();
+    // 连接按钮逻辑
+    function updateConnectButtons() {
+      document.getElementById('connectBtn').style.display = state.connected ? 'none' : 'inline-block';
+      document.getElementById('disconnectBtn').style.display = state.connected ? 'inline-block' : 'none';
+    }
+    document.getElementById('connectBtn').addEventListener('click', () => {
+      // 读取输入框
+      state.broker = document.getElementById('brokerInput').value.trim() || state.broker;
+      state.subTopic = document.getElementById('subTopicInput').value.trim() || state.subTopic;
+      state.pubTopic = document.getElementById('pubTopicInput').value.trim() || state.pubTopic;
+      // 保存
+      localStorage.setItem('aero-broker', state.broker);
+      localStorage.setItem('aero-sub', state.subTopic);
+      localStorage.setItem('aero-pub', state.pubTopic);
+      connectMQTT();
+      updateConnectButtons();
+    });
+    document.getElementById('disconnectBtn').addEventListener('click', () => {
+      disconnectMQTT();
+      updateConnectButtons();
+    });
+
+    // 初始化输入框
+    document.getElementById('brokerInput').value = state.broker;
+    document.getElementById('subTopicInput').value = state.subTopic;
+    document.getElementById('pubTopicInput').value = state.pubTopic;
+    updateConnectButtons();
+
+    // 数据洞察图表
+    const ctx = document.getElementById('insightChart');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: '温度',
+          data: [],
+          borderColor: getComputedStyle(document.documentElement).getPropertyValue('--color-primary'),
+          fill: false
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            display: true,
+            title: { display: false }
+          },
+          y: {
+            display: true,
+            title: { display: false }
+          }
+        },
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+    // 更新洞察图
+    function updateChart() {
+      const field = document.getElementById('insightSelect').value;
+      const labels = state.history.map(item => {
+        const date = new Date(item.t);
+        return date.toLocaleTimeString();
+      });
+      const values = state.history.map(item => item[field]);
+      chart.data.labels = labels;
+      chart.data.datasets[0].label = field;
+      chart.data.datasets[0].data = values;
+      chart.update();
+    }
+    document.getElementById('insightSelect').addEventListener('change', updateChart);
+
+    // 自动初始化
+    window.addEventListener('load', () => {
+      // 加载本地自动化设置（可选）
+      const automation = localStorage.getItem('aero-automation');
+      if (automation) {
+        try {
+          const s = JSON.parse(automation);
+          document.getElementById('targetTemp').value = s.targetTemp || '';
+          document.getElementById('targetHum').value = s.targetHum || '';
+          document.getElementById('phMin').value = s.phMin || '';
+          document.getElementById('phMax').value = s.phMax || '';
+          document.getElementById('ecMin').value = s.ecMin || '';
+          document.getElementById('ecMax').value = s.ecMax || '';
+          document.getElementById('timedMist').checked = s.timedMist || false;
+          document.getElementById('mistOn').value = s.mistOn || '';
+          document.getElementById('mistOff').value = s.mistOff || '';
+        } catch (e) {}
+      }
+      // 初始连接
+      connectMQTT();
+      updateConnectionStatus();
+    });
   </script>
 </body>
 </html>
