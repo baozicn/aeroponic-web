@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="theme-color" content="#0B1220" />
+  <!-- Default theme is LIGHT to align with the mini-program experience -->
+  <meta name="theme-color" content="#EEF5FF" />
   <title>雾境智培 · Web控制台</title>
 
   <!-- CDN Libraries (static page, no build) -->
@@ -20,6 +21,13 @@
     :root{
       --bg0:#070B16;
       --bg1:#0B1220;
+      /* Background (dark) */
+      --bg-grad:
+        radial-gradient(1100px 620px at 10% 8%, rgba(94,234,212,.18), transparent 60%),
+        radial-gradient(1000px 620px at 92% 18%, rgba(96,165,250,.14), transparent 60%),
+        linear-gradient(180deg, var(--bg0) 0%, var(--bg1) 100%);
+      /* Add a subtle grain layer to avoid gradient banding on mobile screens */
+      --noise-opacity: .035;
       --card:rgba(255,255,255,.06);
       --card2:rgba(255,255,255,.08);
       --border:rgba(255,255,255,.10);
@@ -41,8 +49,14 @@
     }
 
     :root[data-theme="light"]{
-      --bg0:#F5F7FF;
-      --bg1:#EAF2FF;
+      --bg0:#F7FAFF;
+      --bg1:#EEF5FF;
+      /* Background (light) */
+      --bg-grad:
+        radial-gradient(1200px 720px at 12% 8%, rgba(94,234,212,.10), transparent 60%),
+        radial-gradient(1100px 680px at 88% 14%, rgba(96,165,250,.10), transparent 62%),
+        linear-gradient(180deg, #F7FAFF 0%, #EEF5FF 55%, #F7FAFF 100%);
+      --noise-opacity: .022;
       --card:rgba(255,255,255,.78);
       --card2:rgba(255,255,255,.92);
       --border:rgba(15,23,42,.10);
@@ -58,12 +72,24 @@
       margin:0;
       font-family:var(--sans);
       color:var(--text);
-      background:
-        radial-gradient(1200px 680px at 10% 10%, rgba(94,234,212,.25), transparent 55%),
-        radial-gradient(1100px 680px at 90% 20%, rgba(96,165,250,.22), transparent 55%),
-        radial-gradient(800px 520px at 70% 90%, rgba(251,113,133,.12), transparent 55%),
-        linear-gradient(180deg, var(--bg0), var(--bg1));
+      background: var(--bg-grad);
       overflow-x:hidden;
+      position:relative;
+    }
+
+    /* A very light grain overlay (dithering) to prevent "blocky" gradient banding on some mobile browsers */
+    body::before{
+      content:"";
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+      z-index:0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+      background-repeat: repeat;
+      /* larger tile => less visible repetition */
+      background-size: 420px 420px;
+      opacity: var(--noise-opacity);
+      mix-blend-mode: soft-light;
     }
 
     a{color:inherit;text-decoration:none}
@@ -72,6 +98,8 @@
       display:grid;
       grid-template-columns: 280px 1fr;
       min-height:100vh;
+      position:relative;
+      z-index:1;
     }
 
     /* ----------------------
@@ -105,6 +133,7 @@
       display:grid;
       place-items:center;
       border:1px solid rgba(255,255,255,.22);
+      color: rgba(255,255,255,.95);
     }
 
     .logo svg{opacity:.96}
@@ -232,6 +261,27 @@
     }
 
     .topActions{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+
+    .statusStrip{
+      display:none;
+      gap:10px;
+      flex-wrap:wrap;
+      padding: 0 6px 10px;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 10px;
+      border-radius: 999px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      color: var(--muted);
+      font-size:12px;
+    }
+    :root[data-theme="light"] .pill{
+      background: rgba(255,255,255,.65);
+    }
 
     .search{
       display:flex;
@@ -566,8 +616,68 @@
       flex:0 0 auto;
     }
 
+    /* Mobile navigation (Drawer + Bottom Tabs) */
+    .scrim{
+      position:fixed;
+      inset:0;
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+      display:none;
+      z-index: 70;
+    }
+
+    .mobileOnly{display:none}
+
+    .bottomNav{
+      display:none;
+      position:fixed;
+      left:12px;
+      right:12px;
+      bottom:12px;
+      padding:10px;
+      gap:6px;
+      border-radius: 20px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.08);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      box-shadow: var(--shadow);
+      z-index: 65;
+    }
+
+    .bottomNav .bItem{
+      flex:1 1 0;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:4px;
+      padding:8px 6px;
+      border-radius:16px;
+      border:1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      font-size:11px;
+      cursor:pointer;
+      transition:.18s ease;
+      user-select:none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .bottomNav .bItem svg{width:18px;height:18px;opacity:.95}
+    .bottomNav .bItem:hover{color:var(--text)}
+    .bottomNav .bItem.active{
+      color: var(--text);
+      background: linear-gradient(135deg, rgba(94,234,212,.18), rgba(96,165,250,.14));
+      border-color: rgba(94,234,212,.18);
+    }
+
+    .hamburger{width:42px;height:42px;border-radius:14px}
+
     /* Responsive */
-    @media (max-width: 1040px){
+    /* Tablet: top layout */
+    @media (max-width: 1040px) and (min-width: 901px){
       .app{grid-template-columns: 1fr}
       .sidebar{position:relative;height:auto;border-right:none;border-bottom:1px solid var(--border)}
       .sideFooter{position:relative;left:auto;right:auto;bottom:auto;margin-top:12px}
@@ -575,16 +685,105 @@
       .search{min-width: 180px}
     }
 
-    @media (max-width: 760px){
-      .grid{grid-template-columns: repeat(6, 1fr)}
-      .span-8,.span-7,.span-6,.span-5,.span-4,.span-3{grid-column: span 6}
+    /* Phone: drawer sidebar + bottom navigation */
+    @media (max-width: 900px){
+      /* Phone layout: bottom navigation (sidebar hidden) */
+      .mobileOnly{display:none}
+      .scrim{display:none}
+      .app{grid-template-columns: 1fr}
+      .sidebar{display:none}
+
+      .main{
+        padding: 12px 12px calc(92px + env(safe-area-inset-bottom));
+      }
+
+      .statusStrip{display:flex}
+
+      /* Mobile top bar: full width and solid background */
+      .topbar{
+        position:sticky;
+        top:0;
+        z-index: 55;
+        width: calc(100% + 24px);
+        margin-left: -12px;
+        margin-right: -12px;
+        padding: 10px 16px;
+        gap:10px;
+        background: var(--card2);
+        border-bottom: 1px solid var(--border);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        box-shadow: none;
+      }
+
+      .topbar .titleRow{
+        width:100%;
+        display:flex;
+        align-items:flex-start;
+        gap:10px;
+      }
+
+      .titleBlock h2{font-size:18px}
+      .titleBlock p{font-size:12px}
+
+      .topActions{
+        width:100%;
+      }
+
+      .search{
+        min-width:0;
+        flex: 1 1 auto;
+      }
+
+      /* One-column layout for cards */
+      .grid{grid-template-columns: 1fr}
+      .span-12,.span-8,.span-7,.span-6,.span-5,.span-4,.span-3{grid-column: 1 / -1}
+
       .controlsGrid{grid-template-columns: 1fr}
       .form{grid-template-columns: 1fr}
-      .topbar{flex-direction:column; align-items:flex-start}
-      .topActions{width:100%}
-      .search{width:100%}
+
+      /* Mobile bottom nav: full width, clean background (no blur) */
+      .bottomNav{
+        display:flex;
+        position: fixed;
+        left:0;
+        right:0;
+        bottom:0;
+        padding:8px 0;
+        gap:4px;
+        border-radius:0;
+        border-top:1px solid var(--border);
+        background: var(--card2);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        box-shadow:none;
+      }
+
+      /* Toast above bottom nav */
+      .toastHost{
+        right:12px;
+        bottom: calc(92px + env(safe-area-inset-bottom));
+      }
+
+      /* Use a flat background on mobile to avoid gradient banding */
+      body{background: var(--bg1) !important;}
     }
 
+    /* Small phone: pack actions into grid */
+    @media (max-width: 520px){
+      .topActions{
+        display:grid;
+        grid-template-columns: 1fr 1fr;
+        gap:10px;
+        width:100%;
+      }
+      .topActions .search{grid-column: 1 / -1; width:100%}
+      #btnQuickRefresh{grid-column: 1}
+      #btnExport{grid-column: 2}
+      .bottomNav{
+        left:10px; right:10px; bottom:10px;
+      }
+    }
     @media (prefers-reduced-motion: reduce){
       *{transition:none !important; animation:none !important}
     }
@@ -615,14 +814,15 @@
 </head>
 
 <body>
-  <div class="app">
+<div class="app">
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="brand">
         <div class="logo" aria-hidden="true">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2C7.6 2 4 5.6 4 10c0 5.2 5.7 11.4 7.4 13.1.3.3.7.3 1 0C14.3 21.4 20 15.2 20 10c0-4.4-3.6-8-8-8Z" fill="rgba(11,18,32,.28)"/>
-            <path d="M12 6.5c-1.9 0-3.5 1.6-3.5 3.5 0 1.9 1.6 3.5 3.5 3.5s3.5-1.6 3.5-3.5c0-1.9-1.6-3.5-3.5-3.5Z" fill="rgba(11,18,32,.45)"/>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M12 2.6s-6 6.9-6 11.3a6 6 0 0 0 12 0C18 9.5 12 2.6 12 2.6Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+            <path d="M10.2 14.1c1.6-3.1 5.2-3.9 7.6-3.3-.5 3.8-3.9 6.4-7.6 6.4-1.2 0-2.3-.2-3.2-.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity=".95"/>
+            <path d="M10.3 14.1c0 2.5.8 4.1 2.4 5.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity=".75"/>
           </svg>
         </div>
         <div>
@@ -671,9 +871,11 @@
     <!-- Main -->
     <main class="main">
       <div class="topbar">
-        <div class="titleBlock">
+        <div class="titleRow">
+<div class="titleBlock">
           <h2>雾境智培 · Web控制台</h2>
-          <p>实时状态与控制面板（适配大屏与移动端）。</p>
+          <p>实时监测 · 智能控制 · 数据洞察</p>
+        </div>
         </div>
         <div class="topActions">
           <div class="search" title="按关键字筛选卡片（例如：温度 / 水位 / EC）">
@@ -685,12 +887,18 @@
         </div>
       </div>
 
+      <div class="statusStrip" id="statusStrip">
+        <span class="pill" title="MQTT 连接状态"><span class="dot" id="mqttDotM"></span><span id="mqttTextM">—</span></span>
+        <span class="pill" title="设备标识"><span class="dot" style="background:var(--brand2)"></span><span>deviceId: <span id="deviceIdTextM">—</span></span></span>
+        <span class="pill" title="STM32 状态"><span class="dot" id="stm32DotM"></span><span id="stm32TextM">—</span></span>
+      </div>
+
       <!-- Views -->
       <section id="view-overview" class="view show">
         <div class="sectionTitle">
           <div>
             <h3>关键指标</h3>
-            <p>状态卡片会随数据更新自动高亮与联动。</p>
+            <p>数据更新会自动同步到页面。</p>
           </div>
           <div class="tabs" id="kpiModeTabs">
             <div class="tab active" data-mode="live">实时</div>
@@ -1156,6 +1364,7 @@
                 <tbody>
                   <tr><td><strong>MQTT</strong></td><td id="mqttStatusCell">—</td></tr>
                   <tr><td><strong>deviceId</strong></td><td id="deviceIdCell">—</td></tr>
+                  <tr><td><strong>Web 版本</strong></td><td>v2026.02.14.10</td></tr>
                   <tr><td><strong>STM32</strong></td><td id="stm32Cell">—</td></tr>
                   <tr><td><strong>上次更新</strong></td><td id="updatedCell">—</td></tr>
                 </tbody>
@@ -1193,10 +1402,10 @@
           </div>
 
           <div class="card span-12" data-keywords="帮助 使用">
-            <div class="cardHeader"><h3>使用说明</h3><span class="badge">无需后端</span></div>
+            <div class="cardHeader"><h3>使用说明</h3><span class="badge">快速上手</span></div>
             <div class="cardBody">
               <div style="color:var(--muted); font-size:13px; line-height:1.55">
-                这个页面是静态网页，可直接打开使用。默认连接到公开 MQTT Broker，你也可以在“连接设置”中切换到自己的服务器。
+                本控制台即开即用，可直接打开使用。默认连接到公开 MQTT Broker，你也可以在“连接设置”中切换到自己的服务器。
                 <br/><br/>
                 如果设备已上报数据，关键指标会自动展示；如果尚未上报，页面会显示占位符并保持界面完整。
               </div>
@@ -1257,6 +1466,30 @@
   </div>
 
   <div class="toastHost" id="toastHost"></div>
+
+  <nav class="bottomNav" id="bottomNav" aria-label="底部导航">
+    <button class="bItem active" type="button" data-view="overview" title="概览">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 13.2V21h7v-7.8H4Zm9 0V21h7v-7.8h-7ZM4 3v8.2h7V3H4Zm9 0v8.2h7V3h-7Z" fill="currentColor" opacity=".9"/></svg>
+      <span>概览</span>
+    </button>
+    <button class="bItem" type="button" data-view="control" title="控制">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm12 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM9 20h6a2 2 0 0 0 2-2v-3H7v3a2 2 0 0 0 2 2Zm0-16h6a2 2 0 0 1 2 2v1H7V6a2 2 0 0 1 2-2Z" fill="currentColor" opacity=".9"/></svg>
+      <span>控制</span>
+    </button>
+    <button class="bItem" type="button" data-view="automation" title="自动化">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 5v5.2l4 2.3-.9 1.6L11 13V7h2Z" fill="currentColor" opacity=".9"/></svg>
+      <span>自动化</span>
+    </button>
+    <button class="bItem" type="button" data-view="insights" title="数据">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 19h16v2H4v-2Zm2-2h2V9H6v8Zm5 0h2V5h-2v12Zm5 0h2V12h-2v5Z" fill="currentColor" opacity=".9"/></svg>
+      <span>数据</span>
+    </button>
+    <button class="bItem" type="button" data-view="device" title="设备">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm0 4v12h10V6H7Zm2 14h6v-1H9v1Z" fill="currentColor" opacity=".9"/></svg>
+      <span>设备</span>
+    </button>
+  </nav>
+
 
   <script>
     /* ----------------------
@@ -1323,6 +1556,19 @@
       el.querySelector('.x').onclick = ()=> el.remove();
       host.appendChild(el);
       setTimeout(()=>{ if(el.isConnected) el.remove(); }, 5200);
+    }
+
+    /*
+     * Helper: Only assign to appState when the new value is not null/undefined.
+     * This prevents occasional MQTT messages that omit certain fields from
+     * overwriting existing values with null, which caused the UI to flicker
+     * between "在线"和"等待数据"状态.  Using maybeSet ensures that
+     * incremental payloads merge cleanly.
+     */
+    function maybeSet(key, value){
+      if(value !== null && value !== undefined){
+        appState[key] = value;
+      }
     }
 
     function escapeHtml(s){
@@ -1414,8 +1660,20 @@
     };
 
     // local preferences
+    // Theme migration: old versions defaulted to DARK and stored it into localStorage automatically.
+    // We now default to LIGHT (align with the mini-program). To avoid "always dark" on upgraded phones,
+    // we bump a schema key and reset to light once.
+    const THEME_SCHEMA = '2';
+    (function migrateTheme(){
+      const schema = localStorage.getItem('aero_web_theme_schema');
+      if(schema !== THEME_SCHEMA){
+        localStorage.setItem('aero_web_theme_schema', THEME_SCHEMA);
+        localStorage.setItem('aero_web_theme', 'light');
+      }
+    })();
+
     const pref = {
-      theme: localStorage.getItem('aero_web_theme') || 'dark',
+      theme: localStorage.getItem('aero_web_theme') || 'light',
       ranges: loadRanges(),
       targets: loadTargets(),
       schedule: loadSchedule(),
@@ -1456,7 +1714,14 @@
     function setTheme(theme){
       pref.theme = theme;
       document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
+      localStorage.setItem('aero_web_theme_schema', THEME_SCHEMA);
       localStorage.setItem('aero_web_theme', pref.theme);
+
+      // Keep mobile browser UI color in sync (Android address bar, etc.)
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if(meta){
+        meta.setAttribute('content', theme === 'light' ? '#EEF5FF' : '#0B1220');
+      }
     }
 
     setTheme(pref.theme);
@@ -1583,36 +1848,37 @@
 
       // map values (support multiple key styles)
       // env
-      appState.temp = num(data.temp ?? data.temperature ?? data.EnvTemperature);
-      appState.hum  = num(data.hum  ?? data.humidity    ?? data.EnvHumidity);
-      appState.lux  = num(data.lux  ?? data.light       ?? data.LightIntensity);
-      appState.ec   = num(data.ec   ?? data.EC);
-      appState.ph   = num(data.ph   ?? data.PH ?? data.pH);
-      appState.waterVolume = num(data.waterVolume ?? data.CurrentWaterVolume);
-      appState.runtime = num(data.runtime ?? data.uptime_h ?? data.UptimeHours ?? data.RuntimeHours);
+      maybeSet('temp', num(data.temp ?? data.temperature ?? data.EnvTemperature));
+      maybeSet('hum',  num(data.hum  ?? data.humidity    ?? data.EnvHumidity));
+      // lux: do not fallback to 'light' (that is a boolean), use LightIntensity only
+      maybeSet('lux',  num(data.lux  ?? data.LightIntensity));
+      maybeSet('ec',   num(data.ec   ?? data.EC));
+      maybeSet('ph',   num(data.ph   ?? data.PH ?? data.pH));
+      maybeSet('waterVolume', num(data.waterVolume ?? data.CurrentWaterVolume));
+      maybeSet('runtime', num(data.runtime ?? data.uptime_h ?? data.UptimeHours ?? data.RuntimeHours));
 
       // water
-      appState.waterLevel = num(data.waterLevel ?? data.WaterLevel);
-      appState.waterLevelState = num(data.waterLevelState ?? data.WaterLevelState);
-      appState.lvRssi = num(data.lvRssi ?? data.LvRssi ?? data.rssi);
+      maybeSet('waterLevel', num(data.waterLevel ?? data.WaterLevel));
+      maybeSet('waterLevelState', num(data.waterLevelState ?? data.WaterLevelState));
+      maybeSet('lvRssi', num(data.lvRssi ?? data.LvRssi ?? data.rssi));
 
       // comm
-      appState.stm32Online = bool(data.stm32Online ?? data.stm32_online ?? data.online);
-      appState.rxOk = num(data.rxOk);
-      appState.crcErr = num(data.crcErr);
-      appState.ageMs = num(data.ageMs);
+      maybeSet('stm32Online', bool(data.stm32Online ?? data.stm32_online ?? data.online));
+      maybeSet('rxOk', num(data.rxOk));
+      maybeSet('crcErr', num(data.crcErr));
+      maybeSet('ageMs', num(data.ageMs));
 
       // system
-      appState.mist = bool(data.mistEnable ?? data.mist);
-      appState.mistOnSec  = num(data.mistOnSec ?? data.mist_on ?? data.mistOn);
-      appState.mistOffSec = num(data.mistOffSec ?? data.mist_off ?? data.mistOff);
-      appState.fan = bool(data.fan);
-      appState.fanSpeed = num(data.fanSpeed ?? data.fanPwm);
-      appState.heater = bool(data.heater);
-      appState.light = bool(data.light);
-      appState.lightPWM = num(data.lightPWM ?? data.lightPwm);
-      appState.sensorState = bool(data.sensorState);
-      appState.leak = bool(data.leak);
+      maybeSet('mist', bool(data.mistEnable ?? data.mist));
+      maybeSet('mistOnSec',  num(data.mistOnSec ?? data.mist_on ?? data.mistOn));
+      maybeSet('mistOffSec', num(data.mistOffSec ?? data.mist_off ?? data.mistOff));
+      maybeSet('fan', bool(data.fan));
+      maybeSet('fanSpeed', num(data.fanSpeed ?? data.fanPwm));
+      maybeSet('heater', bool(data.heater));
+      maybeSet('light', bool(data.light));
+      maybeSet('lightPWM', num(data.lightPWM ?? data.lightPwm));
+      maybeSet('sensorState', bool(data.sensorState));
+      maybeSet('leak', bool(data.leak));
 
       appState.lastUpdateTs = Date.now();
 
@@ -1645,10 +1911,20 @@
        UI Update
     -----------------------*/
     function updateMqttChip(ok, text){
+      const cls = 'dot ' + (ok ? 'ok' : 'bad');
+
       const dot = $('mqttDot');
-      dot.className = 'dot ' + (ok ? 'ok' : 'bad');
-      $('mqttText').textContent = text;
-      $('mqttStatusCell').textContent = ok ? '已连接' : text;
+      if(dot) dot.className = cls;
+      const dotM = $('mqttDotM');
+      if(dotM) dotM.className = cls;
+
+      const t1 = $('mqttText');
+      if(t1) t1.textContent = text;
+      const t2 = $('mqttTextM');
+      if(t2) t2.textContent = text;
+
+      const cell = $('mqttStatusCell');
+      if(cell) cell.textContent = ok ? '已连接' : text;
     }
 
     function updateStm32Chip(){
@@ -1660,23 +1936,30 @@
           online = appState.ageMs < 3000;
         }
       }
+
       const dot = $('stm32Dot');
       const txt = $('stm32Text');
+      const dotM = $('stm32DotM');
+      const txtM = $('stm32TextM');
+
+      const setBoth = (cls, label)=>{
+        if(dot) dot.className = cls;
+        if(dotM) dotM.className = cls;
+        if(txt) txt.textContent = label;
+        if(txtM) txtM.textContent = label;
+      };
 
       if(online === null){
-        dot.className = 'dot warn';
-        txt.textContent = '等待数据';
+        setBoth('dot warn', '等待数据');
         $('stm32Cell').textContent = '—';
         return;
       }
 
       if(online){
-        dot.className = 'dot ok';
-        txt.textContent = 'STM32 在线';
+        setBoth('dot ok', 'STM32 在线');
         $('stm32Cell').textContent = '在线';
       }else{
-        dot.className = 'dot bad';
-        txt.textContent = 'STM32 离线';
+        setBoth('dot bad', 'STM32 离线');
         $('stm32Cell').textContent = '离线';
       }
     }
@@ -1757,7 +2040,10 @@
     }
 
     function updateDeviceCells(){
-      $('deviceIdText').textContent = appState.deviceId || '-';
+      const id = appState.deviceId || '-';
+      $('deviceIdText').textContent = id;
+      const idM = $('deviceIdTextM');
+      if(idM) idM.textContent = id;
       $('deviceIdCell').textContent = appState.deviceId || '—';
       $('updatedCell').textContent = appState.lastUpdateTs ? new Date(appState.lastUpdateTs).toLocaleString() : '—';
       $('lastUpdateText').textContent = appState.lastUpdateTs ? new Date(appState.lastUpdateTs).toLocaleTimeString() : '—';
@@ -1961,10 +2247,18 @@
       const target = document.getElementById('view-' + name);
       if(target) target.classList.add('show');
 
-      // active nav
+      // active sidebar nav
       for(const a of document.querySelectorAll('#nav a')) a.classList.remove('active');
       const a = document.querySelector(`#nav a[data-view="${name}"]`);
       if(a) a.classList.add('active');
+
+      // active bottom nav (mobile)
+      for(const b of document.querySelectorAll('#bottomNav .bItem')) b.classList.remove('active');
+      const b = document.querySelector(`#bottomNav .bItem[data-view="${name}"]`);
+      if(b) b.classList.add('active');
+
+      // close drawer on navigation (mobile)
+      document.body.classList.remove('navOpen');
 
       // chart refresh
       if(name === 'insights') updateChart();
@@ -2243,6 +2537,20 @@
     }
 
     /* ----------------------
+       Mobile drawer & bottom nav
+    -----------------------*/
+    function bindMobileNav(){
+      // Bottom navigation tabs (phone / small screens)
+      document.querySelectorAll('#bottomNav .bItem').forEach(b=>{
+        b.onclick = ()=>{
+          const v = b.getAttribute('data-view');
+          showView(v);
+        };
+      });
+    }
+
+
+    /* ----------------------
        Settings bindings
     -----------------------*/
     function bindSettings(){
@@ -2294,6 +2602,7 @@
 
       buildChart();
       bindNav();
+      bindMobileNav();
       bindSettings();
       bindTabs();
       bindControls();
