@@ -694,7 +694,8 @@
       .sidebar{display:none}
 
       .main{
-        padding: 12px 12px calc(92px + env(safe-area-inset-bottom));
+        /* Remove top padding on mobile to avoid blank strip above the top bar */
+        padding: 0 12px calc(92px + env(safe-area-inset-bottom));
       }
 
       .statusStrip{display:flex}
@@ -704,10 +705,12 @@
         position:sticky;
         top:0;
         z-index: 55;
-        width: calc(100% + 24px);
-        margin-left: -12px;
-        margin-right: -12px;
-        padding: 10px 16px;
+        /* Fill the entire viewport width on mobile */
+        width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+        /* Use a slightly smaller padding for compactness */
+        padding: 8px 16px;
         gap:10px;
         background: var(--card2);
         border-bottom: 1px solid var(--border);
@@ -904,6 +907,10 @@
             <div class="tab active" data-mode="live">实时</div>
             <div class="tab" data-mode="today">今日趋势</div>
             <div class="tab" data-mode="health">健康概览</div>
+          </div>
+          <!-- Description for KPI modes -->
+          <div class="kpiModeDesc" id="kpiModeDesc" style="margin-top:6px; font-size:12px; color: var(--muted2);">
+            实时模式：展示当前传感数据。
           </div>
         </div>
 
@@ -2480,11 +2487,20 @@
     function bindTabs(){
       // KPIs tabs (visual only)
       $('kpiModeTabs').querySelectorAll('.tab').forEach(t=>{
-        t.onclick = ()=>{
+          t.onclick = ()=>{
           $('kpiModeTabs').querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
           t.classList.add('active');
           const mode = t.getAttribute('data-mode');
           toast('模式切换', mode === 'live' ? '已切换到实时视图' : (mode === 'today' ? '已切换到今日趋势' : '已切换到健康概览'), 'ok');
+          // Update KPI mode description text
+          const descEl = $('kpiModeDesc');
+          if (descEl) {
+            descEl.textContent = mode === 'live'
+              ? '实时模式：展示当前传感数据。'
+              : mode === 'today'
+              ? '今日趋势：展示今日数据范围。'
+              : '健康概览：展示系统状态评估。';
+          }
         }
       });
 
