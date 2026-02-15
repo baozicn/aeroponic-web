@@ -694,28 +694,31 @@
       .sidebar{display:none}
 
       .main{
-        padding: 12px 12px calc(92px + env(safe-area-inset-bottom));
+        /* Remove top padding on mobile to avoid blank strip above the top bar */
+        padding: 0 12px calc(92px + env(safe-area-inset-bottom));
       }
 
       .statusStrip{display:flex}
 
+      /* Mobile top bar: full width and solid background */
       .topbar{
         position:sticky;
         top:0;
         z-index: 55;
-        padding:10px 0 10px;
+        /* Fill the entire viewport width on mobile */
+        width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+        /* Use a slightly smaller padding for compactness */
+        padding: 8px 16px;
         gap:10px;
-        /* Mobile: solid-glass topbar (no dark shadow / no dirty stacking) */
-        background: rgba(250,252,255,.92);
-        border-bottom: 1px solid rgba(2,6,23,.06);
+        background: var(--card2);
+        border-bottom: 1px solid var(--border);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
         box-shadow: none;
-        backdrop-filter: saturate(160%) blur(12px);
-        -webkit-backdrop-filter: saturate(160%) blur(12px);
       }
-      :root[data-theme="dark"] .topbar{
-        background: rgba(7,12,22,.78);
-        border-bottom: 1px solid rgba(148,163,184,.16);
-      }
+
       .topbar .titleRow{
         width:100%;
         display:flex;
@@ -742,13 +745,31 @@
       .controlsGrid{grid-template-columns: 1fr}
       .form{grid-template-columns: 1fr}
 
-      .bottomNav{display:flex}
+      /* Mobile bottom nav: full width, clean background (no blur) */
+      .bottomNav{
+        display:flex;
+        position: fixed;
+        left:0;
+        right:0;
+        bottom:0;
+        padding:8px 0;
+        gap:4px;
+        border-radius:0;
+        border-top:1px solid var(--border);
+        background: var(--card2);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        box-shadow:none;
+      }
 
       /* Toast above bottom nav */
       .toastHost{
         right:12px;
         bottom: calc(92px + env(safe-area-inset-bottom));
       }
+
+      /* Use a flat background on mobile to avoid gradient banding */
+      body{background: var(--bg1) !important;}
     }
 
     /* Small phone: pack actions into grid */
@@ -886,6 +907,10 @@
             <div class="tab active" data-mode="live">实时</div>
             <div class="tab" data-mode="today">今日趋势</div>
             <div class="tab" data-mode="health">健康概览</div>
+          </div>
+          <!-- Description for KPI modes -->
+          <div class="kpiModeDesc" id="kpiModeDesc" style="margin-top:6px; font-size:12px; color: var(--muted2);">
+            实时模式：展示当前传感数据。
           </div>
         </div>
 
@@ -1346,7 +1371,7 @@
                 <tbody>
                   <tr><td><strong>MQTT</strong></td><td id="mqttStatusCell">—</td></tr>
                   <tr><td><strong>deviceId</strong></td><td id="deviceIdCell">—</td></tr>
-                  <tr><td><strong>Web 版本</strong></td><td>v2026.02.14.7</td></tr>
+                  <tr><td><strong>Web 版本</strong></td><td>v2026.02.14.10</td></tr>
                   <tr><td><strong>STM32</strong></td><td id="stm32Cell">—</td></tr>
                   <tr><td><strong>上次更新</strong></td><td id="updatedCell">—</td></tr>
                 </tbody>
@@ -1487,20 +1512,10 @@
     function num(v){
       if(v === null || v === undefined) return null;
       if(typeof v === 'number') return Number.isFinite(v) ? v : null;
-      if(typeof v === 'boolean') return null;
-
       const s = String(v).trim();
       if(!s) return null;
-
-      // Fast path: plain numeric string
-      const n1 = Number(s);
-      if(Number.isFinite(n1)) return n1;
-
-      // Robust parse: extract first number from a mixed string (e.g., "26.2C", "68%")
-      const m = s.match(/[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/);
-      if(!m) return null;
-      const n2 = Number(m[0]);
-      return Number.isFinite(n2) ? n2 : null;
+      const n = Number(s);
+      return Number.isFinite(n) ? n : null;
     }
 
     function bool(v){
@@ -1550,6 +1565,19 @@
       setTimeout(()=>{ if(el.isConnected) el.remove(); }, 5200);
     }
 
+    /*
+     * Helper: Only assign to appState when the new value is not null/undefined.
+     * This prevents occasional MQTT messages that omit certain fields from
+     * overwriting existing values with null, which caused the UI to flicker
+     * between "在线"和"等待数据"状态.  Using maybeSet ensures that
+     * incremental payloads merge cleanly.
+     */
+    function maybeSet(key, value){
+      if(value !== null && value !== undefined){
+        appState[key] = value;
+      }
+    }
+
     function escapeHtml(s){
       return String(s)
         .replaceAll('&','&amp;')
@@ -1582,9 +1610,7 @@
       pubTopic: 'home/control',
       clientId: 'aero-web-' + Math.random().toString(16).slice(2, 10),
       deviceFilter: ''
-    };    // Connection status thresholds
-    const STALE_MS   = 6000;  // 6 seconds => show "等待更新"
-    const OFFLINE_MS = 15000; // 15 seconds => show "离线"
+    };
 
     const cfg = loadCfg();
 
@@ -1604,7 +1630,7 @@
     const appState = {
       connected: false,
       deviceId: '',
-      lastUpdateTs: null,
+      lastUpdateTs: 0,
       stm32Online: null,
       rxOk: null,
       crcErr: null,
@@ -1811,78 +1837,55 @@
 
       // normalize payload
       const data = obj.data || obj.payload || obj;
-
-      // helper: pick the first *defined* value from a list of keys (undefined -> treated as missing)
-      const pick = (keys)=>{
-        for(let i=0;i<keys.length;i++){
-          const k = keys[i];
-          if(data && data[k] !== undefined) return data[k];
-        }
-        return undefined;
-      };
-
-      // device id (optional but highly recommended)
-      const deviceIdRaw = pick(['deviceId','devid','clientId','device']);
-      const deviceId = (deviceIdRaw === undefined || deviceIdRaw === null) ? '' : String(deviceIdRaw);
-
+      const deviceId = data.deviceId || data.devid || data.clientId || data.device || '';
       if(deviceId){
-        if(!appState.deviceId) appState.deviceId = deviceId;
+        if(!appState.deviceId) appState.deviceId = String(deviceId);
         // update device filter options
-        addDeviceOption(deviceId);
+        addDeviceOption(String(deviceId));
       }
 
-      // device filter (if enabled, require a matching deviceId; otherwise ignore this packet)
-      if(cfg.deviceFilter){
-        if(!deviceId) return;
-        if(String(deviceId) !== String(cfg.deviceFilter)) return;
+      // device filter
+      if(cfg.deviceFilter && deviceId && String(deviceId) !== String(cfg.deviceFilter)){
+        return;
       }
 
       appState.raw = data;
       appState.rawText = JSON.stringify(data, null, 2);
       $('rawPre').textContent = appState.rawText;
 
-      // Patch-update values (do NOT overwrite existing state when a key is absent).
-      // This prevents flicker when ESP32 publishes data in multiple batches.
-      const setNum = (key, raw)=>{
-        if(raw === undefined) return;
-        appState[key] = num(raw);
-      };
-      const setBool = (key, raw)=>{
-        if(raw === undefined) return;
-        appState[key] = bool(raw);
-      };
-
+      // map values (support multiple key styles)
       // env
-      setNum('temp', pick(['temp','temperature','EnvTemperature']));
-      setNum('hum',  pick(['hum','humidity','EnvHumidity']));
-      setNum('lux',  pick(['lux','LightIntensity','illumination','illuminance','Lux']));
-      setNum('ec',   pick(['ec','EC']));
-      setNum('ph',   pick(['ph','PH','pH']));
-      setNum('waterVolume', pick(['waterVolume','CurrentWaterVolume']));
-      setNum('runtime', pick(['runtime','uptime_h','UptimeHours','RuntimeHours']));
+      maybeSet('temp', num(data.temp ?? data.temperature ?? data.EnvTemperature));
+      maybeSet('hum',  num(data.hum  ?? data.humidity    ?? data.EnvHumidity));
+      // lux: do not fallback to 'light' (that is a boolean), use LightIntensity only
+      maybeSet('lux',  num(data.lux  ?? data.LightIntensity));
+      maybeSet('ec',   num(data.ec   ?? data.EC));
+      maybeSet('ph',   num(data.ph   ?? data.PH ?? data.pH));
+      maybeSet('waterVolume', num(data.waterVolume ?? data.CurrentWaterVolume));
+      maybeSet('runtime', num(data.runtime ?? data.uptime_h ?? data.UptimeHours ?? data.RuntimeHours));
 
-      // water / lv485
-      setNum('waterLevel', pick(['waterLevel','WaterLevel']));
-      setNum('waterLevelState', pick(['waterLevelState','WaterLevelState']));
-      setNum('lvRssi', pick(['lvRssi','LvRssi','rssi']));
+      // water
+      maybeSet('waterLevel', num(data.waterLevel ?? data.WaterLevel));
+      maybeSet('waterLevelState', num(data.waterLevelState ?? data.WaterLevelState));
+      maybeSet('lvRssi', num(data.lvRssi ?? data.LvRssi ?? data.rssi));
 
-      // comm diagnostics
-      setBool('stm32Online', pick(['stm32Online','stm32_online']));
-      setNum('rxOk', pick(['rxOk']));
-      setNum('crcErr', pick(['crcErr']));
-      setNum('ageMs', pick(['ageMs']));
+      // comm
+      maybeSet('stm32Online', bool(data.stm32Online ?? data.stm32_online ?? data.online));
+      maybeSet('rxOk', num(data.rxOk));
+      maybeSet('crcErr', num(data.crcErr));
+      maybeSet('ageMs', num(data.ageMs));
 
-      // system / actuators
-      setBool('mist', pick(['mistEnable','mist']));
-      setNum('mistOnSec', pick(['mistOnSec','mist_on','mistOn']));
-      setNum('mistOffSec', pick(['mistOffSec','mist_off','mistOff']));
-      setBool('fan', pick(['fan']));
-      setNum('fanSpeed', pick(['fanSpeed','fanPwm']));
-      setBool('heater', pick(['heater']));
-      setBool('light', pick(['light']));
-      setNum('lightPWM', pick(['lightPWM','lightPwm']));
-      setBool('sensorState', pick(['sensorState']));
-      setBool('leak', pick(['leak']));
+      // system
+      maybeSet('mist', bool(data.mistEnable ?? data.mist));
+      maybeSet('mistOnSec',  num(data.mistOnSec ?? data.mist_on ?? data.mistOn));
+      maybeSet('mistOffSec', num(data.mistOffSec ?? data.mist_off ?? data.mistOff));
+      maybeSet('fan', bool(data.fan));
+      maybeSet('fanSpeed', num(data.fanSpeed ?? data.fanPwm));
+      maybeSet('heater', bool(data.heater));
+      maybeSet('light', bool(data.light));
+      maybeSet('lightPWM', num(data.lightPWM ?? data.lightPwm));
+      maybeSet('sensorState', bool(data.sensorState));
+      maybeSet('leak', bool(data.leak));
 
       appState.lastUpdateTs = Date.now();
 
@@ -1932,33 +1935,13 @@
     }
 
     function updateStm32Chip(){
-  const dot  = $('stm32Dot');
-  const txt  = $('stm32Text');
-  const dotM = $('stm32DotM');
-  const txtM = $('stm32TextM');
-  const setBoth = (cls, label)=>{
-    if(dot) dot.className = cls;
-    if(dotM) dotM.className = cls;
-    if(txt) txt.textContent = label;
-    if(txtM) txtM.textContent = label;
-  };
-  if(appState.lastUpdateTs === null){
-    setBoth('dot warn', '等待数据');
-    $('stm32Cell').textContent = '—';
-    return;
-  }
-  const age = Date.now() - appState.lastUpdateTs;
-  if(age < STALE_MS){
-    setBoth('dot ok', '在线');
-    $('stm32Cell').textContent = '在线';
-  } else if(age < OFFLINE_MS) {
-    setBoth('dot warn', '等待更新');
-    $('stm32Cell').textContent = '等待更新';
-  } else {
-    setBoth('dot bad', '离线');
-    $('stm32Cell').textContent = '离线';
-  }
-}
+      // derive online
+      let online = appState.stm32Online;
+      if(online === null){
+        // if ageMs present
+        if(appState.ageMs !== null){
+          online = appState.ageMs < 3000;
+        }
       }
 
       const dot = $('stm32Dot');
@@ -2102,6 +2085,7 @@
 
     function updateAll(){
       updateDeviceCells();
+      updateStm32Chip();
       updateBadges();
       updateKpis();
       updateSystemLine();
@@ -2503,11 +2487,20 @@
     function bindTabs(){
       // KPIs tabs (visual only)
       $('kpiModeTabs').querySelectorAll('.tab').forEach(t=>{
-        t.onclick = ()=>{
+          t.onclick = ()=>{
           $('kpiModeTabs').querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
           t.classList.add('active');
           const mode = t.getAttribute('data-mode');
           toast('模式切换', mode === 'live' ? '已切换到实时视图' : (mode === 'today' ? '已切换到今日趋势' : '已切换到健康概览'), 'ok');
+          // Update KPI mode description text
+          const descEl = $('kpiModeDesc');
+          if (descEl) {
+            descEl.textContent = mode === 'live'
+              ? '实时模式：展示当前传感数据。'
+              : mode === 'today'
+              ? '今日趋势：展示今日数据范围。'
+              : '健康概览：展示系统状态评估。';
+          }
         }
       });
 
@@ -2644,38 +2637,20 @@
       // connect automatically
       connect();
 
-      // periodic status tick: update last update time and connection state
-setInterval(() => {
-  // update human-readable times
-  if(appState.lastUpdateTs){
-    const last = new Date(appState.lastUpdateTs);
-    const timeStr = last.toLocaleTimeString();
-    const dateStr = last.toLocaleString();
-    const tText = $('lastUpdateText');
-    if(tText) tText.textContent = timeStr;
-    const updCell = $('updatedCell');
-    if(updCell) updCell.textContent = dateStr;
-  }
-  // update connection indicator and dev badge using unified thresholds
-  updateStm32Chip();
-  const badge = $('devBadge');
-  if(badge){
-    if(!appState.deviceId){
-      badge.textContent = '等待设备数据';
-    } else if(appState.lastUpdateTs === null){
-      badge.textContent = '等待数据';
-    } else {
-      const age = Date.now() - appState.lastUpdateTs;
-      if(age < STALE_MS){
-        badge.textContent = '已识别设备';
-      } else if(age < OFFLINE_MS){
-        badge.textContent = '等待更新';
-      } else {
-        badge.textContent = '离线';
-      }
-    }
-  }
-}, 1000);
+      // periodic status tick
+      setInterval(()=>{
+        // show "last update"
+        if(appState.lastUpdateTs){
+          $('lastUpdateText').textContent = new Date(appState.lastUpdateTs).toLocaleTimeString();
+        }
+        // if no message for too long, show offline hint
+        const age = appState.lastUpdateTs ? (Date.now() - appState.lastUpdateTs) : null;
+        if(age !== null && age > 8000){
+          $('devBadge').textContent = '长时间未收到数据';
+          $('stm32Dot').className = 'dot bad';
+          $('stm32Text').textContent = '等待更新';
+        }
+      }, 1000);
 
       updateAll();
       updateChart();
