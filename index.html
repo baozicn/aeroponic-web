@@ -1371,7 +1371,7 @@
                 <tbody>
                   <tr><td><strong>MQTT</strong></td><td id="mqttStatusCell">—</td></tr>
                   <tr><td><strong>deviceId</strong></td><td id="deviceIdCell">—</td></tr>
-                  <tr><td><strong>Web 版本</strong></td><td>v2026.02.14.10</td></tr>
+                  <tr><td><strong>Web 版本</strong></td><td>v2026.02.15.0</td></tr>
                   <tr><td><strong>STM32</strong></td><td id="stm32Cell">—</td></tr>
                   <tr><td><strong>上次更新</strong></td><td id="updatedCell">—</td></tr>
                 </tbody>
@@ -1612,6 +1612,11 @@
       deviceFilter: ''
     };
 
+    // 设置在线/离线判断阈值（毫秒）
+    // STALE_MS 表示超过该毫秒数未收到数据则进入“等待更新”状态
+    // OFFLINE_MS 表示超过该毫秒数未收到数据则视为离线
+    const STALE_MS = 6000;   // 6秒
+    const OFFLINE_MS = 12000; // 12秒
     const cfg = loadCfg();
 
     function loadCfg(){
@@ -1630,7 +1635,7 @@
     const appState = {
       connected: false,
       deviceId: '',
-      lastUpdateTs: 0,
+      lastUpdateTs: null,
       stm32Online: null,
       rxOk: null,
       crcErr: null,
@@ -1754,10 +1759,10 @@
 
       client = mqtt.connect(cfg.broker, {
         clientId: cfg.clientId,
-        keepalive: 45,
+        keepalive: 30,
         clean: true,
-        reconnectPeriod: 1500,
-        connectTimeout: 9000
+        reconnectPeriod: 800,
+        connectTimeout: 6000
       });
 
       client.on('connect', ()=>{
@@ -1935,19 +1940,12 @@
     }
 
     function updateStm32Chip(){
-      // derive online
-      let online = appState.stm32Online;
-      if(online === null){
-        // if ageMs present
-        if(appState.ageMs !== null){
-          online = appState.ageMs < 3000;
-        }
-      }
-
-      const dot = $('stm32Dot');
-      const txt = $('stm32Text');
+      // 根据最后更新时间和阈值判断在线状态，并统一更新 devBadge、stm32 状态行
+      const dot  = $('stm32Dot');
+      const txt  = $('stm32Text');
       const dotM = $('stm32DotM');
       const txtM = $('stm32TextM');
+      const dev  = $('devBadge');
 
       const setBoth = (cls, label)=>{
         if(dot) dot.className = cls;
@@ -1956,17 +1954,41 @@
         if(txtM) txtM.textContent = label;
       };
 
-      if(online === null){
+      // 如果还没有识别设备，显示等待
+      if(!appState.deviceId){
         setBoth('dot warn', '等待数据');
+        if(dev) dev.textContent = '等待设备数据';
         $('stm32Cell').textContent = '—';
         return;
       }
 
-      if(online){
-        setBoth('dot ok', 'STM32 在线');
+      // 计算距离最后更新时间的间隔
+      let age = null;
+      if(appState.lastUpdateTs){
+        age = Date.now() - appState.lastUpdateTs;
+      }
+
+      // 未收到过数据
+      if(age === null){
+        setBoth('dot warn', '等待更新');
+        if(dev) dev.textContent = '等待更新';
+        $('stm32Cell').textContent = '等待更新';
+        return;
+      }
+      // 在线
+      if(age <= STALE_MS){
+        setBoth('dot ok', '在线');
+        if(dev) dev.textContent = '在线';
         $('stm32Cell').textContent = '在线';
+      }else if(age <= OFFLINE_MS){
+        // 等待更新
+        setBoth('dot warn', '等待更新');
+        if(dev) dev.textContent = '等待更新';
+        $('stm32Cell').textContent = '等待更新';
       }else{
-        setBoth('dot bad', 'STM32 离线');
+        // 离线
+        setBoth('dot bad', '离线');
+        if(dev) dev.textContent = '离线';
         $('stm32Cell').textContent = '离线';
       }
     }
@@ -2054,15 +2076,7 @@
       $('deviceIdCell').textContent = appState.deviceId || '—';
       $('updatedCell').textContent = appState.lastUpdateTs ? new Date(appState.lastUpdateTs).toLocaleString() : '—';
       $('lastUpdateText').textContent = appState.lastUpdateTs ? new Date(appState.lastUpdateTs).toLocaleTimeString() : '—';
-
-      // dev badge
-      const b = $('devBadge');
-      if(appState.deviceId){
-        b.textContent = '已识别设备';
-      }else{
-        b.textContent = '等待设备数据';
-      }
-
+      // dev badge 已交由 updateStm32Chip 处理
       // health
       const ok = (appState.leak === true) ? false : true;
       $('healthText').textContent = ok ? '正常' : '注意';
@@ -2637,19 +2651,14 @@
       // connect automatically
       connect();
 
-      // periodic status tick
+            // periodic status tick: 更新最近更新时间并统一刷新设备状态
       setInterval(()=>{
-        // show "last update"
         if(appState.lastUpdateTs){
           $('lastUpdateText').textContent = new Date(appState.lastUpdateTs).toLocaleTimeString();
+        }else{
+          $('lastUpdateText').textContent = '—';
         }
-        // if no message for too long, show offline hint
-        const age = appState.lastUpdateTs ? (Date.now() - appState.lastUpdateTs) : null;
-        if(age !== null && age > 8000){
-          $('devBadge').textContent = '长时间未收到数据';
-          $('stm32Dot').className = 'dot bad';
-          $('stm32Text').textContent = '等待更新';
-        }
+        updateStm32Chip();
       }, 1000);
 
       updateAll();
