@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useMqtt } from './hooks/useMqtt';
-import { Sidebar } from './components/Sidebar';
+import { Sidebar } from './components/SideBar';
 import { Topbar, BottomNav } from './components/Topbar';
 import { Overview } from './views/Overview';
 import { Control } from './views/Control';
