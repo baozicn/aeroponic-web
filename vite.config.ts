@@ -14,7 +14,7 @@ export default defineConfig(({mode}) => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
-      base: process.env.VITE_BASE || '/',
+      base:  process.env.NODE_ENV === 'production' ? '/aeroponic-web/' : '/',
   },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
